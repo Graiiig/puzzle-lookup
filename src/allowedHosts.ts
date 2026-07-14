@@ -1,25 +1,22 @@
 /**
  * Host allowlists for anything that fetches/renders an arbitrary URL
  * (debug routes, image proxy) — without one, those endpoints would be an
- * open SSRF proxy even behind the API key. Two separate, differently-scoped
- * lists rather than one shared one: the debug routes render full pages with
- * a real browser (a much stronger primitive), so they stay pinned to the
- * exact search-page hostnames, while the image proxy only needs read access
- * to static image bytes and additionally needs subdomains (puzzle.fr's image
- * CDN is data.puzzle.fr). Broadening the debug routes' check to subdomains
- * too would let a takeover of any forgotten subdomain of either root domain
- * be rendered/screenshotted through this server, which the narrower check
- * never allowed.
+ * open SSRF proxy even behind the API key. Both are exact-match, deliberately
+ * not a subdomain wildcard: the only image host actually used today is
+ * puzzle.fr's CDN, data.puzzle.fr. Add a specific hostname here if another
+ * one is needed rather than widening to a whole root domain — a subdomain
+ * takeover of some unrelated, forgotten host under puzzle.fr/ean-search.org
+ * should not automatically gain access to either endpoint.
  */
 const EXACT_SEARCH_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr", "www.ean-search.org", "ean-search.org"]);
-const IMAGE_ROOT_DOMAINS = ["puzzle.fr", "ean-search.org"];
+const EXACT_IMAGE_HOSTS = new Set(["data.puzzle.fr"]);
 
 export function isAllowedSearchHost(hostname: string): boolean {
   return EXACT_SEARCH_HOSTS.has(hostname);
 }
 
 export function isAllowedImageHost(hostname: string): boolean {
-  return IMAGE_ROOT_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  return EXACT_IMAGE_HOSTS.has(hostname);
 }
 
 function parseUrlWithCheck(raw: string, isAllowed: (hostname: string) => boolean): URL {

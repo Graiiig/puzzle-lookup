@@ -3,6 +3,7 @@ import { isAllowedImageHost, parseAllowedImageUrl } from "./allowedHosts.js";
 import { requireApiKey } from "./auth.js";
 
 const FETCH_TIMEOUT_MS = 10000;
+const MAX_BYTES = 10 * 1024 * 1024; // 10MB — a product photo has no business being bigger.
 
 /**
  * Proxies an image from puzzle.fr/ean-search.org through this server, so the
@@ -41,7 +42,14 @@ export function registerImageProxyRoute(app: FastifyInstance): void {
       if (!contentType.startsWith("image/")) {
         return reply.code(502).send({ error: `unexpected content-type: ${contentType}` });
       }
+      const contentLength = Number(upstream.headers.get("content-length") ?? "0");
+      if (contentLength > MAX_BYTES) {
+        return reply.code(502).send({ error: "image too large" });
+      }
       const bytes = Buffer.from(await upstream.arrayBuffer());
+      if (bytes.byteLength > MAX_BYTES) {
+        return reply.code(502).send({ error: "image too large" });
+      }
       return reply.type(contentType).send(bytes);
     } catch (err) {
       return reply.code(502).send({ error: (err as Error).message });
