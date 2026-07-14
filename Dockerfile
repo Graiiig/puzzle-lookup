@@ -1,5 +1,5 @@
 # Base image already ships Chromium + all OS deps Playwright needs.
-FROM mcr.microsoft.com/playwright:v1.61.1-jammy AS base
+FROM mcr.microsoft.com/playwright:v1.56.0-jammy AS base
 WORKDIR /app
 
 FROM base AS build
