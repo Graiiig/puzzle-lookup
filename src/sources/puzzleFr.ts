@@ -1,6 +1,10 @@
 import type { Page } from "playwright";
 import { newStealthContext } from "../browser.js";
-import { extractPieceCount } from "../util.js";
+import {
+  extractBrandFromDescription,
+  extractPieceCount,
+  stripPuzzleFrSiteSuffix,
+} from "../util.js";
 import type { LookupResult } from "../types.js";
 import { jsonLdBrandName, jsonLdImageUrl, readProductJsonLd } from "./jsonld.js";
 
@@ -56,13 +60,23 @@ export async function extractProduct(page: Page, productUrl: string): Promise<Lo
     .first()
     .getAttribute("content", { timeout: 2000 })
     .catch(() => null);
+  const description = await page
+    .locator('meta[name="description"]')
+    .first()
+    .getAttribute("content", { timeout: 2000 })
+    .catch(() => null);
+  const pageTitle = await page.title().catch(() => "");
 
-  const name = product?.name ?? ogTitle ?? undefined;
+  const name =
+    product?.name ?? ogTitle ?? (pageTitle ? stripPuzzleFrSiteSuffix(pageTitle) : undefined) ?? undefined;
   if (!name) return null;
 
   const imageUrl = (product ? jsonLdImageUrl(product) : undefined) ?? ogImage ?? undefined;
-  const brand = product ? jsonLdBrandName(product) : undefined;
-  const pieces = extractPieceCount(name) ?? extractPieceCount(productUrl);
+  const brand =
+    (product ? jsonLdBrandName(product) : undefined) ??
+    (description ? extractBrandFromDescription(description) : undefined);
+  const pieces =
+    extractPieceCount(name) ?? extractPieceCount(productUrl) ?? (description ? extractPieceCount(description) : undefined);
 
   return {
     found: true,

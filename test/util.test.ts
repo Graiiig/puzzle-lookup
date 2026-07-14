@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { extractPieceCount } from "../src/util.js";
+import { extractBrandFromDescription, extractPieceCount, stripPuzzleFrSiteSuffix } from "../src/util.js";
 
 test("extractPieceCount finds counts in various formats", () => {
   assert.equal(extractPieceCount("Tour Eiffel de nuit - puzzle 1000 pieces"), 1000);
@@ -11,4 +11,24 @@ test("extractPieceCount finds counts in various formats", () => {
 
 test("extractPieceCount returns undefined when absent", () => {
   assert.equal(extractPieceCount("Tour Eiffel de nuit"), undefined);
+});
+
+test("extractBrandFromDescription reads puzzle.fr's meta description template", () => {
+  assert.equal(
+    extractBrandFromDescription(
+      "Puzzle Le Grand Livre de Disney de marque Trefl comprenant 6000 pièces à partir de 58.95 €.",
+    ),
+    "Trefl",
+  );
+});
+
+test("extractBrandFromDescription returns undefined when the template doesn't match", () => {
+  assert.equal(extractBrandFromDescription("Un puzzle sympa pour toute la famille."), undefined);
+});
+
+test("stripPuzzleFrSiteSuffix removes the trailing site name", () => {
+  assert.equal(
+    stripPuzzleFrSiteSuffix("Tour Eiffel de nuit - Puzzle.fr/Planet'Puzzles"),
+    "Tour Eiffel de nuit",
+  );
 });

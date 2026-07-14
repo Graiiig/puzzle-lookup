@@ -49,6 +49,19 @@ test("extractProduct reads brand/name/pieces/image from JSON-LD", async () => {
   assert.equal(result.imageUrl, "https://www.puzzle.fr/img/p/5/8/8/6/4/58864-large.jpg");
 });
 
+test("extractProduct falls back to <title>/description when no JSON-LD or og:meta", async () => {
+  await loadFixture("puzzlefr-product-no-jsonld.html");
+  const result = await extractProduct(
+    page,
+    "https://www.puzzle.fr/le-grand-livre-de-disney-puzzle-6000-pieces.p12345.html",
+  );
+  assert.ok(result?.found);
+  if (!result?.found) return;
+  assert.equal(result.brand, "Trefl");
+  assert.equal(result.pieces, 6000);
+  assert.equal(result.name, "Puzzle Le Grand Livre de Disney Trefl-81037 6000 pièces Puzzles - Disney");
+});
+
 test("findResultName + findVendorLink read ean-search.org results", async () => {
   await loadFixture("eansearch-results.html");
   const name = await findResultName(page);

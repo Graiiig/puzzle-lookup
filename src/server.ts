@@ -1,11 +1,14 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { requireApiKey } from "./auth.js";
+import { registerDebugRoutes } from "./debug.js";
 import { isValidEan, lookupEan } from "./lookup.js";
 
 export function buildServer(): FastifyInstance {
   const app = Fastify({ logger: true });
 
   app.get("/health", async () => ({ ok: true }));
+
+  registerDebugRoutes(app);
 
   app.get(
     "/lookup",
