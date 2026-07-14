@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { extractBrandFromDescription, extractPieceCount, stripPuzzleFrSiteSuffix } from "../src/util.js";
+import {
+  extractBrandFromDescription,
+  extractPieceCount,
+  stripPuzzleFrSiteSuffix,
+  upgradeToHttps,
+} from "../src/util.js";
 
 test("extractPieceCount finds counts in various formats", () => {
   assert.equal(extractPieceCount("Tour Eiffel de nuit - puzzle 1000 pieces"), 1000);
@@ -30,5 +35,16 @@ test("stripPuzzleFrSiteSuffix removes the trailing site name", () => {
   assert.equal(
     stripPuzzleFrSiteSuffix("Tour Eiffel de nuit - Puzzle.fr/Planet'Puzzles"),
     "Tour Eiffel de nuit",
+  );
+});
+
+test("upgradeToHttps rewrites plain http image URLs", () => {
+  assert.equal(
+    upgradeToHttps("http://data.puzzle.fr/m82/p102850/p1.jpg"),
+    "https://data.puzzle.fr/m82/p102850/p1.jpg",
+  );
+  assert.equal(
+    upgradeToHttps("https://data.puzzle.fr/m82/p102850/p1.jpg"),
+    "https://data.puzzle.fr/m82/p102850/p1.jpg",
   );
 });

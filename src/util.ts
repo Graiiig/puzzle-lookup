@@ -24,6 +24,16 @@ export function stripPuzzleFrSiteSuffix(title: string): string {
   return title.replace(/\s*-\s*Puzzle\.fr.*$/i, "").trim();
 }
 
+/**
+ * Some image URLs come back as plain http (seen on puzzle.fr's og:image).
+ * Consuming apps (the Android build especially, which blocks cleartext
+ * traffic by default) need https, and CDNs serving images virtually always
+ * support it too.
+ */
+export function upgradeToHttps(url: string): string {
+  return url.replace(/^http:\/\//i, "https://");
+}
+
 export async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: NodeJS.Timeout;
   const timeout = new Promise<never>((_, reject) => {

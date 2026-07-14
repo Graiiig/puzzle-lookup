@@ -4,6 +4,7 @@ import {
   extractBrandFromDescription,
   extractPieceCount,
   stripPuzzleFrSiteSuffix,
+  upgradeToHttps,
 } from "../util.js";
 import type { LookupResult } from "../types.js";
 import { jsonLdBrandName, jsonLdImageUrl, readProductJsonLd } from "./jsonld.js";
@@ -72,7 +73,8 @@ export async function extractProduct(page: Page, productUrl: string): Promise<Lo
     product?.name ?? ogTitle ?? (pageTitle ? stripPuzzleFrSiteSuffix(pageTitle) : undefined) ?? undefined;
   if (!name) return null;
 
-  const imageUrl = (product ? jsonLdImageUrl(product) : undefined) ?? ogImage ?? undefined;
+  const rawImageUrl = (product ? jsonLdImageUrl(product) : undefined) ?? ogImage ?? undefined;
+  const imageUrl = rawImageUrl ? upgradeToHttps(rawImageUrl) : undefined;
   const brand =
     (product ? jsonLdBrandName(product) : undefined) ??
     (description ? extractBrandFromDescription(description) : undefined);
