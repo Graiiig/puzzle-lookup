@@ -28,6 +28,11 @@ Réponse 200 dans tous les cas :
 
 `GET /health` renvoie `{ "ok": true }` sans authentification (healthcheck Coolify).
 
+CORS est restreint aux origines listées dans `ALLOWED_ORIGINS` (par défaut :
+GitHub Pages de puzzle-tracker + `localhost` de dev + l'origine par défaut du
+WebView Capacitor Android) — un appel `fetch()` depuis un autre site sera
+bloqué par le navigateur.
+
 ## Logique de résolution
 
 1. **puzzle.fr** : recherche l'EAN via `https://www.puzzle.fr/recherche/<ean>?src=1`

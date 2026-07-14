@@ -1,10 +1,18 @@
+import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import { requireApiKey } from "./auth.js";
+import { config } from "./config.js";
 import { registerDebugRoutes } from "./debug.js";
 import { isValidEan, lookupEan } from "./lookup.js";
 
 export function buildServer(): FastifyInstance {
   const app = Fastify({ logger: true });
+
+  app.register(cors, {
+    origin: config.allowedOrigins,
+    methods: ["GET"],
+    allowedHeaders: ["x-api-key", "content-type"],
+  });
 
   app.get("/health", async () => ({ ok: true }));
 
