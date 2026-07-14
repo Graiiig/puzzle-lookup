@@ -18,10 +18,7 @@ const PRODUCT_URL_RE = /\.p\d+\.html(?:[?#].*)?$/i;
 
 function searchUrls(ean: string): string[] {
   const q = encodeURIComponent(ean);
-  return [
-    `https://www.puzzle.fr/recherche?controller=search&s=${q}`,
-    `https://www.puzzle.fr/index.php?controller=search&s=${q}`,
-  ];
+  return [`https://www.puzzle.fr/recherche/${q}?src=1`];
 }
 
 /** Picks the first product link out of a rendered search results page. */

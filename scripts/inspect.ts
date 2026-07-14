@@ -4,7 +4,7 @@
  * src/sources/*.ts can be verified/adjusted against the live site.
  *
  * Usage:
- *   npm run inspect -- "https://www.puzzle.fr/recherche?controller=search&s=1234567890123"
+ *   npm run inspect -- "https://www.puzzle.fr/recherche/1234567890123?src=1"
  *   npm run inspect -- "https://www.ean-search.org/?q=1234567890123"
  */
 import { mkdir, writeFile } from "node:fs/promises";
