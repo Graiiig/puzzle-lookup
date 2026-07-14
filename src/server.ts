@@ -14,12 +14,12 @@ export function buildServer(): FastifyInstance {
     "/lookup",
     { preHandler: requireApiKey },
     async (request, reply) => {
-      const { ean } = request.query as { ean?: string };
+      const { ean, refresh } = request.query as { ean?: string; refresh?: string };
       if (!ean || !isValidEan(ean)) {
         return reply.code(400).send({ error: "invalid or missing 'ean' query parameter" });
       }
 
-      const result = await lookupEan(ean);
+      const result = await lookupEan(ean, { skipCache: refresh === "1" });
       return reply.send(result);
     },
   );

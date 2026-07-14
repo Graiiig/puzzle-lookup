@@ -8,9 +8,14 @@ publiques. Utilisé par l'app [puzzle-tracker](https://github.com/Graiiig/puzzle
 ## API
 
 ```
-GET /lookup?ean=<code-barre>
+GET /lookup?ean=<code-barre>[&refresh=1]
 Header: x-api-key: <clé partagée>
 ```
+
+`refresh=1` ignore le cache et force un nouveau scrape (utile pour retester une
+source après un échec ponctuel — sans ça, un `found:true` mis en cache reste
+servi tel quel jusqu'à expiration du TTL, même s'il vient d'une source de
+repli suite à un raté transitoire de la source principale).
 
 Réponse 200 dans tous les cas :
 
