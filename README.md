@@ -43,7 +43,7 @@ Réponse 200 dans tous les cas :
 Le scraping passe par Playwright (Chromium headless) car les deux sites
 bloquent les requêtes HTTP simples (403).
 
-Chaque source a un timeout (`SOURCE_TIMEOUT_MS`, 9s par défaut) : en cas de
+Chaque source a un timeout (`SOURCE_TIMEOUT_MS`, 15s par défaut) : en cas de
 dépassement, d'erreur, ou de structure de page imprévue, on passe à la source
 suivante sans planter.
 
