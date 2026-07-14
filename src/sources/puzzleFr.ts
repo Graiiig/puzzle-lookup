@@ -1,5 +1,4 @@
-import type { Page } from "playwright";
-import { newStealthContext } from "../browser.js";
+import type { BrowserContext, Page } from "playwright";
 import { config } from "../config.js";
 import {
   extractBrandFromDescription,
@@ -93,8 +92,12 @@ export async function extractProduct(page: Page, productUrl: string): Promise<Lo
   };
 }
 
-export async function searchPuzzleFr(ean: string): Promise<LookupResult | null> {
-  const context = await newStealthContext();
+/**
+ * Takes an already-created context rather than making its own, so the
+ * caller (lookup.ts's tryOne) can force-close it on timeout and actually
+ * cancel an in-flight scrape instead of leaving it running in the background.
+ */
+export async function searchPuzzleFr(ean: string, context: BrowserContext): Promise<LookupResult | null> {
   try {
     const page = await context.newPage();
     const productUrl = await findProductUrl(page, ean);
@@ -115,7 +118,5 @@ export async function searchPuzzleFr(ean: string): Promise<LookupResult | null> 
   } catch (err) {
     console.warn(`puzzle.fr: scrape failed for ${ean}:`, (err as Error).message);
     return null;
-  } finally {
-    await context.close();
   }
 }

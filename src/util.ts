@@ -34,10 +34,24 @@ export function upgradeToHttps(url: string): string {
   return url.replace(/^http:\/\//i, "https://");
 }
 
-export async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+/**
+ * Races `promise` against a timer. Promise.race can't actually cancel the
+ * loser, so `onTimeout` (typically closing the Playwright context driving
+ * `promise`) is invoked when the timer wins, forcing the abandoned work to
+ * reject instead of continuing to run in the background.
+ */
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+  onTimeout?: () => void,
+): Promise<T> {
   let timer: NodeJS.Timeout;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
   });
   try {
     return await Promise.race([promise, timeout]);

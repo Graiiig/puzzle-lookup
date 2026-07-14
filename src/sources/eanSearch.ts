@@ -1,7 +1,6 @@
-import type { Page } from "playwright";
-import { newStealthContext } from "../browser.js";
+import type { BrowserContext, Page } from "playwright";
 import { config } from "../config.js";
-import { extractPieceCount } from "../util.js";
+import { extractPieceCount, upgradeToHttps } from "../util.js";
 import type { LookupResult } from "../types.js";
 
 /**
@@ -54,8 +53,12 @@ export async function findVendorLink(page: Page): Promise<string | undefined> {
   return hrefs.find((href) => !href.includes("ean-search.org"));
 }
 
-export async function searchEanSearch(ean: string): Promise<LookupResult | null> {
-  const context = await newStealthContext();
+/**
+ * Takes an already-created context rather than making its own, so the
+ * caller (lookup.ts's tryOne) can force-close it on timeout and actually
+ * cancel an in-flight scrape instead of leaving it running in the background.
+ */
+export async function searchEanSearch(ean: string, context: BrowserContext): Promise<LookupResult | null> {
   try {
     const page = await context.newPage();
     await page.goto(`https://www.ean-search.org/?q=${encodeURIComponent(ean)}`, {
@@ -67,7 +70,8 @@ export async function searchEanSearch(ean: string): Promise<LookupResult | null>
     const name = await findResultName(page);
     if (!name) return null;
 
-    const vendorUrl = await findVendorLink(page);
+    const rawVendorUrl = await findVendorLink(page);
+    const vendorUrl = rawVendorUrl ? upgradeToHttps(rawVendorUrl) : undefined;
     const pieces = extractPieceCount(name);
 
     return {
@@ -80,7 +84,5 @@ export async function searchEanSearch(ean: string): Promise<LookupResult | null>
   } catch (err) {
     console.warn(`ean-search.org: scrape failed for ${ean}:`, (err as Error).message);
     return null;
-  } finally {
-    await context.close();
   }
 }
