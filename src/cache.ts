@@ -35,12 +35,16 @@ function load(): Promise<void> {
   return loadPromise;
 }
 
-/** Writes via a temp file + rename so a crash mid-write can't corrupt the cache file. */
+let tmpFileCounter = 0;
+
+/** Writes via a temp file + rename so a crash mid-write can't corrupt the cache file.
+ * The tmp path is unique per call (not just per process) so concurrent persist()
+ * calls in the same process can't collide on the same file. */
 async function persist(): Promise<void> {
   const obj: CacheFile = Object.fromEntries(store.entries());
   const dir = path.dirname(config.cacheFilePath);
   await mkdir(dir, { recursive: true });
-  const tmpPath = `${config.cacheFilePath}.${process.pid}.tmp`;
+  const tmpPath = `${config.cacheFilePath}.${process.pid}-${tmpFileCounter++}.tmp`;
   await writeFile(tmpPath, JSON.stringify(obj), "utf8");
   await rename(tmpPath, config.cacheFilePath);
 }
@@ -56,10 +60,9 @@ export async function getCached(ean: string): Promise<LookupResult | undefined> 
   return entry.result;
 }
 
-export async function setCached(ean: string, result: LookupResult): Promise<void> {
+export async function setCached(ean: string, result: LookupResult, ttlMs: number): Promise<void> {
   await load();
-  const ttl = result.found ? config.positiveTtlMs : config.negativeTtlMs;
-  store.set(ean, { result, expiresAt: Date.now() + ttl });
+  store.set(ean, { result, expiresAt: Date.now() + ttlMs });
   try {
     await persist();
   } catch (err) {

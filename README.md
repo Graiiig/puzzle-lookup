@@ -33,6 +33,17 @@ GitHub Pages de puzzle-tracker + `localhost` de dev + l'origine par défaut du
 WebView Capacitor Android) — un appel `fetch()` depuis un autre site sera
 bloqué par le navigateur.
 
+```
+GET /image?url=<url_de_l_image>
+Header: x-api-key: <clé partagée>
+```
+
+Proxifie une image hébergée sur puzzle.fr/ean-search.org (ex. l'`imageUrl`
+renvoyée par `/lookup`) : renvoie les octets de l'image avec les bons headers
+CORS pour l'origine de puzzle-tracker. À utiliser côté client au lieu d'un
+`fetch()` direct de l'`imageUrl`, puisque ces hébergeurs tiers ne sont pas
+prévus pour être appelés en cross-origin depuis un navigateur.
+
 ## Logique de résolution
 
 1. **puzzle.fr** : recherche l'EAN via `https://www.puzzle.fr/recherche/<ean>?src=1`

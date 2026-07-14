@@ -33,7 +33,7 @@ export async function pickProductUrl(page: Page): Promise<string | undefined> {
 async function findProductUrl(page: Page, ean: string): Promise<string | undefined> {
   for (const url of searchUrls(ean)) {
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: config.sourceTimeoutMs });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
       await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
     } catch (err) {
       console.warn(`puzzle.fr: navigation to ${url} failed:`, (err as Error).message);
@@ -110,7 +110,7 @@ export async function searchPuzzleFr(ean: string, context: BrowserContext): Prom
     // redundant second full navigation (product pages are image/script-heavy
     // enough that this alone can burn the whole per-source timeout budget).
     if (page.url() !== productUrl) {
-      await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.sourceTimeoutMs });
+      await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
       await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
     }
 

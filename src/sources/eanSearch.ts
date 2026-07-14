@@ -63,7 +63,7 @@ export async function searchEanSearch(ean: string, context: BrowserContext): Pro
     const page = await context.newPage();
     await page.goto(`https://www.ean-search.org/?q=${encodeURIComponent(ean)}`, {
       waitUntil: "domcontentloaded",
-      timeout: config.sourceTimeoutMs,
+      timeout: config.navTimeoutMs,
     });
     await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 

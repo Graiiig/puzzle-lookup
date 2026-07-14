@@ -27,7 +27,7 @@ async function tryOne(
   const context = await newStealthContext();
   try {
     const result = await withTimeout(fn(ean, context), config.sourceTimeoutMs, label, () => {
-      void context.close();
+      context.close().catch(() => {});
     });
     return { result, errored: false };
   } catch (err) {
@@ -46,23 +46,23 @@ export async function lookupEan(ean: string, options: { skipCache?: boolean } = 
 
   const puzzleFr = await tryOne(searchPuzzleFr, ean, "puzzle.fr");
   if (puzzleFr.result) {
-    await setCached(ean, puzzleFr.result);
+    await setCached(ean, puzzleFr.result, config.positiveTtlMs);
     return puzzleFr.result;
   }
 
   const eanSearch = await tryOne(searchEanSearch, ean, "ean-search.org");
   if (eanSearch.result) {
-    await setCached(ean, eanSearch.result);
+    await setCached(ean, eanSearch.result, config.positiveTtlMs);
     return eanSearch.result;
   }
 
   const final: LookupResult = { found: false };
-  // Only lock in a negative result once both sources have genuinely
-  // determined "not found" — if either errored/timed out, we don't know
-  // that yet, and caching found:false here would hide a real product
-  // behind a transient failure until the negative TTL expires.
-  if (!puzzleFr.errored && !eanSearch.errored) {
-    await setCached(ean, final);
-  }
+  // A source erroring (timeout/exception) isn't the same as it cleanly
+  // determining "not found" — cache the former only briefly so a permanent
+  // breakage doesn't re-scrape both sites on every single request, without
+  // locking in a false negative for the full negative TTL like a genuine
+  // miss gets.
+  const anyErrored = puzzleFr.errored || eanSearch.errored;
+  await setCached(ean, final, anyErrored ? config.errorTtlMs : config.negativeTtlMs);
   return final;
 }

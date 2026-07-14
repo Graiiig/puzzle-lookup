@@ -1,0 +1,40 @@
+import type { FastifyInstance } from "fastify";
+import { parseAllowedUrl } from "./allowedHosts.js";
+import { requireApiKey } from "./auth.js";
+
+const FETCH_TIMEOUT_MS = 10000;
+
+/**
+ * Proxies an image from puzzle.fr/ean-search.org through this server, so the
+ * frontend can fetch() it without depending on that third-party host sending
+ * CORS headers of its own (it generally won't — those hosts were never
+ * designed to be fetched cross-origin from a browser app).
+ */
+export function registerImageProxyRoute(app: FastifyInstance): void {
+  app.get("/image", { preHandler: requireApiKey }, async (request, reply) => {
+    const { url } = request.query as { url?: string };
+    if (!url) return reply.code(400).send({ error: "missing 'url' query parameter" });
+
+    let target: URL;
+    try {
+      target = parseAllowedUrl(url);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+
+    try {
+      const upstream = await fetch(target.toString(), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      if (!upstream.ok || !upstream.body) {
+        return reply.code(502).send({ error: `upstream responded ${upstream.status}` });
+      }
+      const contentType = upstream.headers.get("content-type") ?? "";
+      if (!contentType.startsWith("image/")) {
+        return reply.code(502).send({ error: `unexpected content-type: ${contentType}` });
+      }
+      const bytes = Buffer.from(await upstream.arrayBuffer());
+      return reply.type(contentType).send(bytes);
+    } catch (err) {
+      return reply.code(502).send({ error: (err as Error).message });
+    }
+  });
+}
