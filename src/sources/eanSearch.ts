@@ -76,7 +76,8 @@ export async function searchEanSearch(ean: string): Promise<LookupResult | null>
       pieces,
       vendorUrl,
     };
-  } catch {
+  } catch (err) {
+    console.warn(`ean-search.org: scrape failed for ${ean}:`, (err as Error).message);
     return null;
   } finally {
     await context.close();

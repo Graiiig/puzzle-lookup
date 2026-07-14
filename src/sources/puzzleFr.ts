@@ -35,7 +35,8 @@ async function findProductUrl(page: Page, ean: string): Promise<string | undefin
     try {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 8000 });
       await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
-    } catch {
+    } catch (err) {
+      console.warn(`puzzle.fr: navigation to ${url} failed:`, (err as Error).message);
       continue;
     }
 
@@ -96,7 +97,10 @@ export async function searchPuzzleFr(ean: string): Promise<LookupResult | null> 
   try {
     const page = await context.newPage();
     const productUrl = await findProductUrl(page, ean);
-    if (!productUrl) return null;
+    if (!productUrl) {
+      console.warn(`puzzle.fr: no product link found for ${ean} (page loaded, no match)`);
+      return null;
+    }
 
     // A single-result search already redirects to this exact page — skip a
     // redundant second full navigation (product pages are image/script-heavy
@@ -107,7 +111,8 @@ export async function searchPuzzleFr(ean: string): Promise<LookupResult | null> 
     }
 
     return await extractProduct(page, productUrl);
-  } catch {
+  } catch (err) {
+    console.warn(`puzzle.fr: scrape failed for ${ean}:`, (err as Error).message);
     return null;
   } finally {
     await context.close();
