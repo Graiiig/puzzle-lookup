@@ -36,6 +36,6 @@ export async function newStealthContext(): Promise<BrowserContext> {
 export async function closeBrowser(): Promise<void> {
   if (!browserPromise) return;
   const browser = await browserPromise;
-  browserPromise = null;
   await browser.close();
+  browserPromise = null;
 }

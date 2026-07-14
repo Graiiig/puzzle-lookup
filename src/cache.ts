@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { config } from "./config.js";
 import type { LookupResult } from "./types.js";
@@ -11,36 +11,38 @@ interface CacheEntry {
 type CacheFile = Record<string, CacheEntry>;
 
 const store = new Map<string, CacheEntry>();
-let loaded = false;
-let writeQueue: Promise<unknown> = Promise.resolve();
+let loadPromise: Promise<void> | null = null;
 
-async function load(): Promise<void> {
-  if (loaded) return;
-  loaded = true;
-  try {
-    const raw = await readFile(config.cacheFilePath, "utf8");
-    const parsed = JSON.parse(raw) as CacheFile;
-    const now = Date.now();
-    for (const [ean, entry] of Object.entries(parsed)) {
-      if (entry.expiresAt > now) store.set(ean, entry);
-    }
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.warn("Failed to load cache file, starting empty:", err);
-    }
+/** Memoizes the in-flight load so concurrent callers await the same read
+ * instead of each seeing an empty store before it completes. */
+function load(): Promise<void> {
+  if (!loadPromise) {
+    loadPromise = (async () => {
+      try {
+        const raw = await readFile(config.cacheFilePath, "utf8");
+        const parsed = JSON.parse(raw) as CacheFile;
+        const now = Date.now();
+        for (const [ean, entry] of Object.entries(parsed)) {
+          if (entry.expiresAt > now) store.set(ean, entry);
+        }
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+          console.warn("Failed to load cache file, starting empty:", err);
+        }
+      }
+    })();
   }
+  return loadPromise;
 }
 
-function persist(): void {
-  writeQueue = writeQueue
-    .then(async () => {
-      const obj: CacheFile = Object.fromEntries(store.entries());
-      await mkdir(path.dirname(config.cacheFilePath), { recursive: true });
-      await writeFile(config.cacheFilePath, JSON.stringify(obj), "utf8");
-    })
-    .catch((err) => {
-      console.warn("Failed to persist cache file:", err);
-    });
+/** Writes via a temp file + rename so a crash mid-write can't corrupt the cache file. */
+async function persist(): Promise<void> {
+  const obj: CacheFile = Object.fromEntries(store.entries());
+  const dir = path.dirname(config.cacheFilePath);
+  await mkdir(dir, { recursive: true });
+  const tmpPath = `${config.cacheFilePath}.${process.pid}.tmp`;
+  await writeFile(tmpPath, JSON.stringify(obj), "utf8");
+  await rename(tmpPath, config.cacheFilePath);
 }
 
 export async function getCached(ean: string): Promise<LookupResult | undefined> {
@@ -58,5 +60,9 @@ export async function setCached(ean: string, result: LookupResult): Promise<void
   await load();
   const ttl = result.found ? config.positiveTtlMs : config.negativeTtlMs;
   store.set(ean, { result, expiresAt: Date.now() + ttl });
-  persist();
+  try {
+    await persist();
+  } catch (err) {
+    console.warn("Failed to persist cache file:", err);
+  }
 }
