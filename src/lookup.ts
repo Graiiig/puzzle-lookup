@@ -50,12 +50,18 @@ export async function lookupEan(ean: string, options: { skipCache?: boolean } = 
   }
 
   const final: LookupResult = { found: false };
-  // A source erroring (timeout/exception) isn't the same as it cleanly
-  // determining "not found" — cache the former only briefly so a permanent
-  // breakage doesn't re-scrape both sites on every single request, without
-  // locking in a false negative for the full negative TTL like a genuine
-  // miss gets.
-  const anyErrored = puzzleFr.errored || eanSearch.errored;
-  await setCached(ean, final, anyErrored ? config.errorTtlMs : config.negativeTtlMs);
+  await setCached(ean, final, negativeTtlMsFor(puzzleFr, eanSearch));
   return final;
+}
+
+/**
+ * A source erroring (timeout/exception) isn't the same as it cleanly
+ * determining "not found" — cache the former only briefly so a permanent
+ * breakage doesn't re-scrape both sites on every single request, without
+ * locking in a false negative for the full negative TTL like a genuine miss
+ * gets. Exported as a pure function so this decision is unit-testable
+ * without needing a real browser/network.
+ */
+export function negativeTtlMsFor(puzzleFr: { errored: boolean }, eanSearch: { errored: boolean }): number {
+  return puzzleFr.errored || eanSearch.errored ? config.errorTtlMs : config.negativeTtlMs;
 }
