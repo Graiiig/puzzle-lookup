@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Page } from "playwright";
-import { isAllowedHost, parseAllowedUrl } from "./allowedHosts.js";
+import { isAllowedSearchHost, parseAllowedSearchUrl } from "./allowedHosts.js";
 import { requireApiKey } from "./auth.js";
 import { newStealthContext } from "./browser.js";
 
@@ -14,7 +14,7 @@ async function renderAllowedUrl<T>(
 
   let target: URL;
   try {
-    target = parseAllowedUrl(raw);
+    target = parseAllowedSearchUrl(raw);
   } catch (err) {
     return { ok: false, status: 400, error: (err as Error).message };
   }
@@ -28,7 +28,7 @@ async function renderAllowedUrl<T>(
     // Re-check after navigation: the allowlist above only covers the
     // requested URL, not wherever the target site's own redirects led.
     const finalHost = new URL(page.url()).hostname;
-    if (!isAllowedHost(finalHost)) {
+    if (!isAllowedSearchHost(finalHost)) {
       return { ok: false, status: 502, error: `redirected outside allowed hosts: ${finalHost}` };
     }
 

@@ -35,18 +35,24 @@ function load(): Promise<void> {
   return loadPromise;
 }
 
-let tmpFileCounter = 0;
+let writeQueue: Promise<void> = Promise.resolve();
 
-/** Writes via a temp file + rename so a crash mid-write can't corrupt the cache file.
- * The tmp path is unique per call (not just per process) so concurrent persist()
- * calls in the same process can't collide on the same file. */
-async function persist(): Promise<void> {
+/** Writes via a temp file + rename so a crash mid-write can't corrupt the
+ * cache file, and serializes writes so concurrent setCached() calls can't
+ * race on the tmp file or complete out of order and silently drop an
+ * update. Each write still snapshots `store` synchronously at call time,
+ * so it reflects everything set before it regardless of queue position. */
+function persist(): Promise<void> {
   const obj: CacheFile = Object.fromEntries(store.entries());
-  const dir = path.dirname(config.cacheFilePath);
-  await mkdir(dir, { recursive: true });
-  const tmpPath = `${config.cacheFilePath}.${process.pid}-${tmpFileCounter++}.tmp`;
-  await writeFile(tmpPath, JSON.stringify(obj), "utf8");
-  await rename(tmpPath, config.cacheFilePath);
+  const task = writeQueue.catch(() => {}).then(async () => {
+    const dir = path.dirname(config.cacheFilePath);
+    await mkdir(dir, { recursive: true });
+    const tmpPath = `${config.cacheFilePath}.tmp`;
+    await writeFile(tmpPath, JSON.stringify(obj), "utf8");
+    await rename(tmpPath, config.cacheFilePath);
+  });
+  writeQueue = task;
+  return task;
 }
 
 export async function getCached(ean: string): Promise<LookupResult | undefined> {

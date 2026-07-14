@@ -19,7 +19,11 @@ export const config = {
   apiKey: process.env.API_KEY ?? "",
   cacheFilePath: process.env.CACHE_FILE_PATH ?? path.join(process.cwd(), "data", "cache.json"),
   // Overall budget for one source's whole lookup (navigation + extraction).
-  sourceTimeoutMs: intFromEnv("SOURCE_TIMEOUT_MS", 25000),
+  // Worst case for puzzle.fr is 2 navigations, each followed by a 4s
+  // networkidle wait, plus up to 3 extraction reads at 2s each: comfortably
+  // under this default so a slow-but-succeeding lookup isn't cut off by the
+  // outer race before navTimeoutMs would have.
+  sourceTimeoutMs: intFromEnv("SOURCE_TIMEOUT_MS", 40000),
   // Budget for a single page.goto call; kept below sourceTimeoutMs so a
   // multi-navigation lookup (search page + product page) still fits inside
   // the overall per-source budget instead of racing against an identical one.
