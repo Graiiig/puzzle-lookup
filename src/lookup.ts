@@ -24,9 +24,11 @@ async function tryOne(
   }
 }
 
-export async function lookupEan(ean: string): Promise<LookupResult> {
-  const cached = await getCached(ean);
-  if (cached) return cached;
+export async function lookupEan(ean: string, options: { skipCache?: boolean } = {}): Promise<LookupResult> {
+  if (!options.skipCache) {
+    const cached = await getCached(ean);
+    if (cached) return cached;
+  }
 
   const result =
     (await tryOne(searchPuzzleFr, ean, "puzzle.fr")) ??
