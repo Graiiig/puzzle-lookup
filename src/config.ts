@@ -12,7 +12,7 @@ export const config = {
   host: process.env.HOST ?? "0.0.0.0",
   apiKey: process.env.API_KEY ?? "",
   cacheFilePath: process.env.CACHE_FILE_PATH ?? path.join(process.cwd(), "data", "cache.json"),
-  sourceTimeoutMs: intFromEnv("SOURCE_TIMEOUT_MS", 9000),
+  sourceTimeoutMs: intFromEnv("SOURCE_TIMEOUT_MS", 15000),
   positiveTtlMs: intFromEnv("POSITIVE_CACHE_TTL_DAYS", 30) * 86_400_000,
   negativeTtlMs: intFromEnv("NEGATIVE_CACHE_TTL_HOURS", 24) * 3_600_000,
 };

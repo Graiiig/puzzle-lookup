@@ -96,8 +96,13 @@ export async function searchPuzzleFr(ean: string): Promise<LookupResult | null> 
     const productUrl = await findProductUrl(page, ean);
     if (!productUrl) return null;
 
-    await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: 8000 });
-    await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+    // A single-result search already redirects to this exact page — skip a
+    // redundant second full navigation (product pages are image/script-heavy
+    // enough that this alone can burn the whole per-source timeout budget).
+    if (page.url() !== productUrl) {
+      await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: 8000 });
+      await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+    }
 
     return await extractProduct(page, productUrl);
   } catch {
