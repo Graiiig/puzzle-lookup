@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import { newStealthContext } from "../browser.js";
+import { config } from "../config.js";
 import {
   extractBrandFromDescription,
   extractPieceCount,
@@ -33,7 +34,7 @@ export async function pickProductUrl(page: Page): Promise<string | undefined> {
 async function findProductUrl(page: Page, ean: string): Promise<string | undefined> {
   for (const url of searchUrls(ean)) {
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 8000 });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: config.sourceTimeoutMs });
       await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
     } catch (err) {
       console.warn(`puzzle.fr: navigation to ${url} failed:`, (err as Error).message);
@@ -106,7 +107,7 @@ export async function searchPuzzleFr(ean: string): Promise<LookupResult | null> 
     // redundant second full navigation (product pages are image/script-heavy
     // enough that this alone can burn the whole per-source timeout budget).
     if (page.url() !== productUrl) {
-      await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: 8000 });
+      await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.sourceTimeoutMs });
       await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
     }
 

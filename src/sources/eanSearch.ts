@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import { newStealthContext } from "../browser.js";
+import { config } from "../config.js";
 import { extractPieceCount } from "../util.js";
 import type { LookupResult } from "../types.js";
 
@@ -59,7 +60,7 @@ export async function searchEanSearch(ean: string): Promise<LookupResult | null>
     const page = await context.newPage();
     await page.goto(`https://www.ean-search.org/?q=${encodeURIComponent(ean)}`, {
       waitUntil: "domcontentloaded",
-      timeout: 8000,
+      timeout: config.sourceTimeoutMs,
     });
     await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
