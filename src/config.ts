@@ -7,6 +7,12 @@ function intFromEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://graiiig.github.io",
+  "http://localhost:5173",
+  "https://localhost",
+];
+
 export const config = {
   port: intFromEnv("PORT", 3000),
   host: process.env.HOST ?? "0.0.0.0",
@@ -15,6 +21,10 @@ export const config = {
   sourceTimeoutMs: intFromEnv("SOURCE_TIMEOUT_MS", 15000),
   positiveTtlMs: intFromEnv("POSITIVE_CACHE_TTL_DAYS", 30) * 86_400_000,
   negativeTtlMs: intFromEnv("NEGATIVE_CACHE_TTL_HOURS", 24) * 3_600_000,
+  allowedOrigins: (process.env.ALLOWED_ORIGINS ?? DEFAULT_ALLOWED_ORIGINS.join(","))
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
 };
 
 export function assertConfig(): void {
