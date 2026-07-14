@@ -25,12 +25,16 @@ Réponse 200 dans tous les cas :
 
 ## Logique de résolution
 
-1. **puzzle.fr** : recherche l'EAN, prend le premier lien produit trouvé sur la
-   page de résultats (repéré via la convention d'URL `...p<id>.html`, pas via
-   des classes CSS), puis extrait marque/nom/image via les données structurées
-   `schema.org/Product` (JSON-LD) de la page produit, avec repli sur les
-   meta `og:title` / `og:image` si absentes. Le nombre de pièces est
-   recherché par regex dans le nom et dans le slug d'URL.
+1. **puzzle.fr** : recherche l'EAN via `https://www.puzzle.fr/recherche/<ean>?src=1`
+   (URL confirmée en prod — pas de blocage Cloudflare observé, la page se
+   rend normalement), prend le premier lien produit trouvé sur la page de
+   résultats (repéré via la convention d'URL `...p<id>.html`, pas via des
+   classes CSS), puis extrait marque/nom/image via les données structurées
+   `schema.org/Product` (JSON-LD) de la page produit si présentes, avec
+   repli sur les meta `og:title` / `og:image`, puis sur le `<title>` et la
+   meta `description` (qui suit un template stable : "... de marque X
+   comprenant Y pièces ..."). Le nombre de pièces est aussi recherché par
+   regex dans le slug d'URL.
 2. **ean-search.org** (si 1. ne trouve rien) : recherche l'EAN, extrait le nom
    du premier résultat et, si présent, un lien externe vers un revendeur.
    Nombre de pièces extrait par regex sur le nom (pas garanti).
@@ -52,38 +56,50 @@ transitoire du scraping plutôt qu'une vraie absence de résultat).
 ## ⚠️ Sélecteurs à vérifier avant mise en prod
 
 Ce service a été développé dans un environnement sandbox dont la politique
-réseau **bloque les accès sortants vers puzzle.fr et ean-search.org**
-(confirmé : 403 sur la connexion HTTPS). Il n'a donc pas été possible
-d'explorer les pages réelles pendant le dev.
+réseau bloque les accès sortants vers puzzle.fr et ean-search.org. Les
+sélecteurs ont donc été ajustés a posteriori, en prod, avec l'aide de deux
+routes de debug (voir plus bas).
 
-Ce qui a été fait pour limiter le risque :
-- Pour puzzle.fr, l'étape la plus fragile (repérer un résultat de recherche)
-  ne dépend d'aucune classe CSS : elle repose uniquement sur la convention
-  d'URL produit documentée dans le brief (`...p<id>.html`). L'extraction des
-  détails s'appuie sur les données structurées JSON-LD `Product`, un standard
-  SEO stable et largement utilisé par les boutiques PrestaShop (bien plus
-  fiable que des sélecteurs de thème).
-- Pour ean-search.org, faute de mieux, l'extraction utilise une liste de
-  sélecteurs candidats (`src/sources/eanSearch.ts`, `RESULT_NAME_SELECTORS`)
-  essayés dans l'ordre, avec repli sur le `<title>` de la page.
+État actuel :
+- **puzzle.fr** : URL de recherche et repérage du lien produit confirmés
+  fonctionnels en prod (voir ci-dessus). Extraction marque/nom/pièces/image
+  avec plusieurs replis (JSON-LD → og:meta → title/description) — pas encore
+  confirmé lequel de ces chemins est réellement emprunté sur ce site (JSON-LD
+  semble absent d'après un premier test).
+- **ean-search.org** : pas encore vérifié en prod. L'extraction utilise une
+  liste de sélecteurs candidats (`src/sources/eanSearch.ts`,
+  `RESULT_NAME_SELECTORS`) essayés dans l'ordre, avec repli sur le `<title>`
+  de la page — à confirmer/ajuster.
 - Dans tous les cas, toute erreur ou structure inattendue fait échouer la
-  source silencieusement (retour `null`) plutôt que de planter — cohérent
-  avec le comportement demandé.
+  source silencieusement (retour `null`) plutôt que de planter.
 
-**Avant de compter dessus en prod**, vérifie/ajuste ces sélecteurs depuis un
-environnement qui a accès à internet (ta machine, ou directement sur le VPS) :
+**Pour ajuster ces sélecteurs**, deux options :
 
-```bash
-npm run inspect -- "https://www.puzzle.fr/recherche?controller=search&s=<un_ean_connu>"
-npm run inspect -- "https://www.ean-search.org/?q=<un_ean_connu>"
-```
+1. Depuis une machine avec accès internet (locale ou VPS) :
+   ```bash
+   npm run inspect -- "https://www.puzzle.fr/recherche/<un_ean_connu>?src=1"
+   npm run inspect -- "https://www.ean-search.org/?q=<un_ean_connu>"
+   ```
+   Ça ouvre un vrai Chromium (non-headless) et sauvegarde `debug/page.html` +
+   `debug/page.png`.
 
-Ça ouvre un vrai Chromium (non-headless) sur l'URL donnée et sauvegarde
-`debug/page.html` + `debug/page.png`. Compare avec ce que `src/sources/puzzleFr.ts`
-et `src/sources/eanSearch.ts` attendent, et ajuste si besoin (URL de recherche
-exacte, sélecteurs candidats). Les tests dans `test/sources.test.ts` tournent
-contre des fixtures HTML locales (`test/fixtures/`) qui simulent la structure
-attendue — à mettre à jour avec du vrai HTML si la structure réelle diffère.
+2. Directement contre le service déployé (utile si pas d'accès Playwright en
+   local), via les routes `/debug/html` et `/debug/screenshot` (protégées par
+   `x-api-key`, restreintes aux hosts puzzle.fr/ean-search.org) :
+   ```bash
+   curl -H "x-api-key: <API_KEY>" \
+     "https://<domaine>/debug/html?url=https%3A%2F%2Fwww.puzzle.fr%2Frecherche%2F<ean>%3Fsrc%3D1" \
+     -o page.html
+   curl -H "x-api-key: <API_KEY>" \
+     "https://<domaine>/debug/screenshot?url=https%3A%2F%2Fwww.puzzle.fr%2Frecherche%2F<ean>%3Fsrc%3D1" \
+     -o page.png
+   ```
+
+Dans les deux cas, compare avec ce que `src/sources/puzzleFr.ts` et
+`src/sources/eanSearch.ts` attendent, et ajuste si besoin. Les tests dans
+`test/sources.test.ts` tournent contre des fixtures HTML locales
+(`test/fixtures/`) qui simulent la structure attendue — à mettre à jour avec
+du vrai HTML si la structure réelle diffère.
 
 ## Développement local
 
