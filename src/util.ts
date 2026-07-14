@@ -8,6 +8,22 @@ export function extractPieceCount(text: string): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+/**
+ * puzzle.fr's product meta description follows a stable template, e.g.
+ * "Puzzle X de marque Trefl comprenant 6000 pièces à partir de ...".
+ * More reliable than DOM selectors since it's SEO copy, not themed markup.
+ */
+const BRAND_FROM_DESCRIPTION_RE = /de marque\s+([^,.]+?)\s+comprenant\b/i;
+
+export function extractBrandFromDescription(text: string): string | undefined {
+  return BRAND_FROM_DESCRIPTION_RE.exec(text)?.[1]?.trim();
+}
+
+/** Strips the "- Puzzle.fr/..." site suffix from a <title> tag value. */
+export function stripPuzzleFrSiteSuffix(title: string): string {
+  return title.replace(/\s*-\s*Puzzle\.fr.*$/i, "").trim();
+}
+
 export async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: NodeJS.Timeout;
   const timeout = new Promise<never>((_, reject) => {
