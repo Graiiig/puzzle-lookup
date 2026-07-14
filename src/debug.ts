@@ -3,6 +3,7 @@ import type { Page } from "playwright";
 import { isAllowedSearchHost, parseAllowedSearchUrl } from "./allowedHosts.js";
 import { requireApiKey } from "./auth.js";
 import { newStealthContext } from "./browser.js";
+import { config } from "./config.js";
 
 type RenderResult<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
 
@@ -22,8 +23,8 @@ async function renderAllowedUrl<T>(
   const context = await newStealthContext();
   try {
     const page = await context.newPage();
-    await page.goto(target.toString(), { waitUntil: "domcontentloaded", timeout: 15000 });
-    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+    await page.goto(target.toString(), { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+    await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
     // Re-check after navigation: the allowlist above only covers the
     // requested URL, not wherever the target site's own redirects led.

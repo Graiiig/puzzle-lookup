@@ -38,16 +38,19 @@ function load(): Promise<void> {
 let writeQueue: Promise<void> = Promise.resolve();
 
 /** Writes via a temp file + rename so a crash mid-write can't corrupt the
- * cache file, and serializes writes so concurrent setCached() calls can't
- * race on the tmp file or complete out of order and silently drop an
+ * cache file, and serializes writes (within this process) so concurrent
+ * setCached() calls can't complete out of order and silently drop an
  * update. Each write still snapshots `store` synchronously at call time,
- * so it reflects everything set before it regardless of queue position. */
+ * so it reflects everything set before it regardless of queue position.
+ * The tmp filename keeps a pid suffix so two server processes briefly
+ * sharing the same CACHE_FILE_PATH (e.g. a rolling-deploy overlap) still
+ * can't collide on it — the write queue only orders writes within one process. */
 function persist(): Promise<void> {
   const obj: CacheFile = Object.fromEntries(store.entries());
   const task = writeQueue.catch(() => {}).then(async () => {
     const dir = path.dirname(config.cacheFilePath);
     await mkdir(dir, { recursive: true });
-    const tmpPath = `${config.cacheFilePath}.tmp`;
+    const tmpPath = `${config.cacheFilePath}.${process.pid}.tmp`;
     await writeFile(tmpPath, JSON.stringify(obj), "utf8");
     await rename(tmpPath, config.cacheFilePath);
   });
