@@ -38,6 +38,10 @@ async function findProductUrl(page: Page, ean: string): Promise<string | undefin
       continue;
     }
 
+    // A single matching product makes puzzle.fr redirect straight to it,
+    // instead of showing a results listing with product links to scan.
+    if (PRODUCT_URL_RE.test(page.url())) return page.url();
+
     const productUrl = await pickProductUrl(page);
     if (productUrl) return productUrl;
   }
