@@ -38,11 +38,12 @@ GET /image?url=<url_de_l_image>
 Header: x-api-key: <clé partagée>
 ```
 
-Proxifie une image hébergée sur puzzle.fr/ean-search.org (ex. l'`imageUrl`
-renvoyée par `/lookup`) : renvoie les octets de l'image avec les bons headers
-CORS pour l'origine de puzzle-tracker. À utiliser côté client au lieu d'un
-`fetch()` direct de l'`imageUrl`, puisque ces hébergeurs tiers ne sont pas
-prévus pour être appelés en cross-origin depuis un navigateur.
+Proxifie une image hébergée sur puzzle.fr (ex. l'`imageUrl` renvoyée par
+`/lookup` — ean-search.org ne renvoie jamais d'image) : renvoie les octets de
+l'image avec les bons headers CORS pour l'origine de puzzle-tracker. À
+utiliser côté client au lieu d'un `fetch()` direct de l'`imageUrl`, puisque
+cet hébergeur tiers n'est pas prévu pour être appelé en cross-origin depuis
+un navigateur.
 
 ## Logique de résolution
 

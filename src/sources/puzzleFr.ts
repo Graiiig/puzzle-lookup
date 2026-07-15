@@ -126,7 +126,13 @@ export async function searchPuzzleFr(ean: string, context: BrowserContext): Prom
     }
 
     const extracted = await extractProduct(page, productUrl);
-    return extracted ?? { found: false, errored: false };
+    if (extracted) return extracted;
+    // We already confirmed a product page exists at productUrl — failing to
+    // extract anything from it (bot-check interstitial, slow render,
+    // selector/markup change) is an anomaly, not a genuine "no such
+    // product", and shouldn't get the long negative-miss TTL.
+    console.warn(`puzzle.fr: found ${productUrl} for ${ean} but couldn't extract a name from it`);
+    return { found: false, errored: true };
   } catch (err) {
     console.warn(`puzzle.fr: scrape failed for ${ean}:`, (err as Error).message);
     return { found: false, errored: true };

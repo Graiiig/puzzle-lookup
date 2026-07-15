@@ -1,15 +1,35 @@
 import type { FastifyInstance } from "fastify";
+import { Readable, Transform } from "node:stream";
 import { isAllowedImageHost, parseAllowedImageUrl } from "./allowedHosts.js";
 import { requireApiKey } from "./auth.js";
 
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB — a product photo has no business being bigger.
 
+/** Passes chunks through unless the running total exceeds MAX_BYTES, in
+ * which case it destroys the stream instead of buffering an unbounded
+ * response (content-length can't be trusted alone: it's absent for some
+ * chunked/compressed responses). */
+function byteLimiter(maxBytes: number): Transform {
+  let total = 0;
+  return new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      total += chunk.length;
+      if (total > maxBytes) {
+        callback(new Error("image too large"));
+        return;
+      }
+      callback(null, chunk);
+    },
+  });
+}
+
 /**
- * Proxies an image from puzzle.fr/ean-search.org through this server, so the
- * frontend can fetch() it without depending on that third-party host sending
- * CORS headers of its own (it generally won't — those hosts were never
- * designed to be fetched cross-origin from a browser app).
+ * Proxies an image (only puzzle.fr today — ean-search.org's results never
+ * carry an imageUrl, see allowedHosts.ts) through this server, so the
+ * frontend can fetch() it without depending on that third-party host
+ * sending CORS headers of its own (it generally won't — that host was
+ * never designed to be fetched cross-origin from a browser app).
  */
 export function registerImageProxyRoute(app: FastifyInstance): void {
   app.get("/image", { preHandler: requireApiKey }, async (request, reply) => {
@@ -42,15 +62,12 @@ export function registerImageProxyRoute(app: FastifyInstance): void {
       if (!contentType.startsWith("image/")) {
         return reply.code(502).send({ error: `unexpected content-type: ${contentType}` });
       }
-      const contentLength = Number(upstream.headers.get("content-length") ?? "0");
-      if (contentLength > MAX_BYTES) {
-        return reply.code(502).send({ error: "image too large" });
-      }
-      const bytes = Buffer.from(await upstream.arrayBuffer());
-      if (bytes.byteLength > MAX_BYTES) {
-        return reply.code(502).send({ error: "image too large" });
-      }
-      return reply.type(contentType).send(bytes);
+
+      // Streamed straight through with a hard byte cap enforced as it goes,
+      // rather than buffering the whole response first — this way a large
+      // or slow response is rejected without ever holding it all in memory.
+      const nodeStream = Readable.fromWeb(upstream.body as import("stream/web").ReadableStream<Uint8Array>);
+      return reply.type(contentType).send(nodeStream.pipe(byteLimiter(MAX_BYTES)));
     } catch (err) {
       return reply.code(502).send({ error: (err as Error).message });
     }
