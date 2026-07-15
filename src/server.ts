@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { requireApiKey } from "./auth.js";
 import { config } from "./config.js";
 import { registerDebugRoutes } from "./debug.js";
+import { registerImageProxyRoute } from "./imageProxy.js";
 import { isValidEan, lookupEan } from "./lookup.js";
 
 export function buildServer(): FastifyInstance {
@@ -17,6 +18,7 @@ export function buildServer(): FastifyInstance {
   app.get("/health", async () => ({ ok: true }));
 
   registerDebugRoutes(app);
+  registerImageProxyRoute(app);
 
   app.get(
     "/lookup",

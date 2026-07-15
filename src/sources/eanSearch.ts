@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from "playwright";
 import { config } from "../config.js";
 import { extractPieceCount, upgradeToHttps } from "../util.js";
-import type { LookupResult } from "../types.js";
+import type { SourceResult } from "../types.js";
 
 /**
  * Best-effort selectors for ean-search.org's search results page. The exact
@@ -58,17 +58,17 @@ export async function findVendorLink(page: Page): Promise<string | undefined> {
  * caller (lookup.ts's tryOne) can force-close it on timeout and actually
  * cancel an in-flight scrape instead of leaving it running in the background.
  */
-export async function searchEanSearch(ean: string, context: BrowserContext): Promise<LookupResult | null> {
+export async function searchEanSearch(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
     const page = await context.newPage();
     await page.goto(`https://www.ean-search.org/?q=${encodeURIComponent(ean)}`, {
       waitUntil: "domcontentloaded",
-      timeout: config.sourceTimeoutMs,
+      timeout: config.navTimeoutMs,
     });
     await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
     const name = await findResultName(page);
-    if (!name) return null;
+    if (!name) return { found: false, errored: false };
 
     const rawVendorUrl = await findVendorLink(page);
     const vendorUrl = rawVendorUrl ? upgradeToHttps(rawVendorUrl) : undefined;
@@ -83,6 +83,6 @@ export async function searchEanSearch(ean: string, context: BrowserContext): Pro
     };
   } catch (err) {
     console.warn(`ean-search.org: scrape failed for ${ean}:`, (err as Error).message);
-    return null;
+    return { found: false, errored: true };
   }
 }

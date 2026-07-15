@@ -4,7 +4,7 @@ import { getCached, setCached } from "./cache.js";
 import { config } from "./config.js";
 import { searchEanSearch } from "./sources/eanSearch.js";
 import { searchPuzzleFr } from "./sources/puzzleFr.js";
-import type { LookupResult } from "./types.js";
+import type { LookupResult, SourceResult } from "./types.js";
 import { withTimeout } from "./util.js";
 
 const EAN_RE = /^\d{8,14}$/;
@@ -13,26 +13,19 @@ export function isValidEan(ean: string): boolean {
   return EAN_RE.test(ean);
 }
 
-interface SourceAttempt {
-  result: LookupResult | null;
-  /** True if the source errored/timed out rather than cleanly resolving. */
-  errored: boolean;
-}
-
 async function tryOne(
-  fn: (ean: string, context: BrowserContext) => Promise<LookupResult | null>,
+  fn: (ean: string, context: BrowserContext) => Promise<SourceResult>,
   ean: string,
   label: string,
-): Promise<SourceAttempt> {
+): Promise<SourceResult> {
   const context = await newStealthContext();
   try {
-    const result = await withTimeout(fn(ean, context), config.sourceTimeoutMs, label, () => {
-      void context.close();
+    return await withTimeout(fn(ean, context), config.sourceTimeoutMs, label, () => {
+      context.close().catch(() => {});
     });
-    return { result, errored: false };
   } catch (err) {
     console.warn(`${label} lookup failed for ${ean}:`, (err as Error).message);
-    return { result: null, errored: true };
+    return { found: false, errored: true };
   } finally {
     await context.close().catch(() => {});
   }
@@ -45,24 +38,30 @@ export async function lookupEan(ean: string, options: { skipCache?: boolean } = 
   }
 
   const puzzleFr = await tryOne(searchPuzzleFr, ean, "puzzle.fr");
-  if (puzzleFr.result) {
-    await setCached(ean, puzzleFr.result);
-    return puzzleFr.result;
+  if (puzzleFr.found) {
+    await setCached(ean, puzzleFr, config.positiveTtlMs);
+    return puzzleFr;
   }
 
   const eanSearch = await tryOne(searchEanSearch, ean, "ean-search.org");
-  if (eanSearch.result) {
-    await setCached(ean, eanSearch.result);
-    return eanSearch.result;
+  if (eanSearch.found) {
+    await setCached(ean, eanSearch, config.positiveTtlMs);
+    return eanSearch;
   }
 
   const final: LookupResult = { found: false };
-  // Only lock in a negative result once both sources have genuinely
-  // determined "not found" — if either errored/timed out, we don't know
-  // that yet, and caching found:false here would hide a real product
-  // behind a transient failure until the negative TTL expires.
-  if (!puzzleFr.errored && !eanSearch.errored) {
-    await setCached(ean, final);
-  }
+  await setCached(ean, final, negativeTtlMsFor(puzzleFr, eanSearch));
   return final;
+}
+
+/**
+ * A source erroring (timeout/exception) isn't the same as it cleanly
+ * determining "not found" — cache the former only briefly so a permanent
+ * breakage doesn't re-scrape both sites on every single request, without
+ * locking in a false negative for the full negative TTL like a genuine miss
+ * gets. Exported as a pure function so this decision is unit-testable
+ * without needing a real browser/network.
+ */
+export function negativeTtlMsFor(puzzleFr: { errored: boolean }, eanSearch: { errored: boolean }): number {
+  return puzzleFr.errored || eanSearch.errored ? config.errorTtlMs : config.negativeTtlMs;
 }

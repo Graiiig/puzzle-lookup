@@ -6,7 +6,7 @@ import {
   stripPuzzleFrSiteSuffix,
   upgradeToHttps,
 } from "../util.js";
-import type { LookupResult } from "../types.js";
+import type { LookupFound, SourceResult } from "../types.js";
 import { jsonLdBrandName, jsonLdImageUrl, readProductJsonLd } from "./jsonld.js";
 
 /**
@@ -30,28 +30,36 @@ export async function pickProductUrl(page: Page): Promise<string | undefined> {
   return hrefs.find((href) => PRODUCT_URL_RE.test(href));
 }
 
-async function findProductUrl(page: Page, ean: string): Promise<string | undefined> {
+interface ProductUrlOutcome {
+  url?: string;
+  /** True if at least one candidate URL failed to navigate (vs. loading fine and finding nothing). */
+  errored: boolean;
+}
+
+async function findProductUrl(page: Page, ean: string): Promise<ProductUrlOutcome> {
+  let errored = false;
   for (const url of searchUrls(ean)) {
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: config.sourceTimeoutMs });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
       await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
     } catch (err) {
       console.warn(`puzzle.fr: navigation to ${url} failed:`, (err as Error).message);
+      errored = true;
       continue;
     }
 
     // A single matching product makes puzzle.fr redirect straight to it,
     // instead of showing a results listing with product links to scan.
-    if (PRODUCT_URL_RE.test(page.url())) return page.url();
+    if (PRODUCT_URL_RE.test(page.url())) return { url: page.url(), errored };
 
     const productUrl = await pickProductUrl(page);
-    if (productUrl) return productUrl;
+    if (productUrl) return { url: productUrl, errored };
   }
-  return undefined;
+  return { errored };
 }
 
 /** Extracts product fields from an already-loaded product page. */
-export async function extractProduct(page: Page, productUrl: string): Promise<LookupResult | null> {
+export async function extractProduct(page: Page, productUrl: string): Promise<LookupFound | null> {
   const product = await readProductJsonLd(page);
   const ogTitle = await page
     .locator('meta[property="og:title"]')
@@ -97,26 +105,36 @@ export async function extractProduct(page: Page, productUrl: string): Promise<Lo
  * caller (lookup.ts's tryOne) can force-close it on timeout and actually
  * cancel an in-flight scrape instead of leaving it running in the background.
  */
-export async function searchPuzzleFr(ean: string, context: BrowserContext): Promise<LookupResult | null> {
+export async function searchPuzzleFr(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
     const page = await context.newPage();
-    const productUrl = await findProductUrl(page, ean);
-    if (!productUrl) {
-      console.warn(`puzzle.fr: no product link found for ${ean} (page loaded, no match)`);
-      return null;
+    const found = await findProductUrl(page, ean);
+    if (!found.url) {
+      if (!found.errored) {
+        console.warn(`puzzle.fr: no product link found for ${ean} (page loaded, no match)`);
+      }
+      return { found: false, errored: found.errored };
     }
+    const productUrl = found.url;
 
     // A single-result search already redirects to this exact page — skip a
     // redundant second full navigation (product pages are image/script-heavy
     // enough that this alone can burn the whole per-source timeout budget).
     if (page.url() !== productUrl) {
-      await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.sourceTimeoutMs });
+      await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
       await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
     }
 
-    return await extractProduct(page, productUrl);
+    const extracted = await extractProduct(page, productUrl);
+    if (extracted) return extracted;
+    // We already confirmed a product page exists at productUrl — failing to
+    // extract anything from it (bot-check interstitial, slow render,
+    // selector/markup change) is an anomaly, not a genuine "no such
+    // product", and shouldn't get the long negative-miss TTL.
+    console.warn(`puzzle.fr: found ${productUrl} for ${ean} but couldn't extract a name from it`);
+    return { found: false, errored: true };
   } catch (err) {
     console.warn(`puzzle.fr: scrape failed for ${ean}:`, (err as Error).message);
-    return null;
+    return { found: false, errored: true };
   }
 }

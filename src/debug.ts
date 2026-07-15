@@ -1,26 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import type { Page } from "playwright";
+import { isAllowedSearchHost, parseAllowedSearchUrl } from "./allowedHosts.js";
 import { requireApiKey } from "./auth.js";
 import { newStealthContext } from "./browser.js";
-
-/**
- * Restricted to the two scraped domains: these routes render arbitrary
- * URLs, so without an allowlist they'd be an open SSRF proxy (even behind
- * the API key). Both the initial URL and the page's URL after navigation
- * (redirects included) are checked against this list.
- */
-const ALLOWED_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr", "www.ean-search.org", "ean-search.org"]);
-
-function parseAllowedUrl(raw: string): URL {
-  const url = new URL(raw);
-  if (url.protocol !== "https:") {
-    throw new Error(`scheme not allowed: ${url.protocol}`);
-  }
-  if (!ALLOWED_HOSTS.has(url.hostname)) {
-    throw new Error(`host not allowed: ${url.hostname}`);
-  }
-  return url;
-}
+import { config } from "./config.js";
 
 type RenderResult<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
 
@@ -32,7 +15,7 @@ async function renderAllowedUrl<T>(
 
   let target: URL;
   try {
-    target = parseAllowedUrl(raw);
+    target = parseAllowedSearchUrl(raw);
   } catch (err) {
     return { ok: false, status: 400, error: (err as Error).message };
   }
@@ -40,13 +23,13 @@ async function renderAllowedUrl<T>(
   const context = await newStealthContext();
   try {
     const page = await context.newPage();
-    await page.goto(target.toString(), { waitUntil: "domcontentloaded", timeout: 15000 });
-    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+    await page.goto(target.toString(), { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+    await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
     // Re-check after navigation: the allowlist above only covers the
     // requested URL, not wherever the target site's own redirects led.
     const finalHost = new URL(page.url()).hostname;
-    if (!ALLOWED_HOSTS.has(finalHost)) {
+    if (!isAllowedSearchHost(finalHost)) {
       return { ok: false, status: 502, error: `redirected outside allowed hosts: ${finalHost}` };
     }
 
