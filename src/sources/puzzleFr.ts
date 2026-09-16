@@ -1,55 +1,19 @@
 import type { BrowserContext, Page } from "playwright";
 import { fetchViaScraperApi } from "../scraperApi.js";
-import {
-  extractBrandFromDescription,
-  extractPieceCount,
-  stripPuzzleFrSiteSuffix,
-  upgradeToHttps,
-} from "../util.js";
+import { extractBrandFromDescription, stripPuzzleFrSiteSuffix } from "../util.js";
 import type { LookupFound, SourceResult } from "../types.js";
-import { findPuzzleFrProductUrl } from "./serperSearch.js";
-import { jsonLdBrandName, jsonLdImageUrl, readProductJsonLd } from "./jsonld.js";
+import { extractGenericProduct } from "./genericProductExtract.js";
+import { findProductUrlViaSerper } from "./serperSearch.js";
+
+const PUZZLE_FR_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr"]);
 
 /** Extracts product fields from an already-loaded product page. */
 export async function extractProduct(page: Page, productUrl: string): Promise<LookupFound | null> {
-  const product = await readProductJsonLd(page);
-  const ogTitle = await page
-    .locator('meta[property="og:title"]')
-    .first()
-    .getAttribute("content", { timeout: 2000 })
-    .catch(() => null);
-  const ogImage = await page
-    .locator('meta[property="og:image"]')
-    .first()
-    .getAttribute("content", { timeout: 2000 })
-    .catch(() => null);
-  const description = await page
-    .locator('meta[name="description"]')
-    .first()
-    .getAttribute("content", { timeout: 2000 })
-    .catch(() => null);
-  const pageTitle = await page.title().catch(() => "");
-
-  const name =
-    product?.name ?? ogTitle ?? (pageTitle ? stripPuzzleFrSiteSuffix(pageTitle) : undefined) ?? undefined;
-  if (!name) return null;
-
-  const rawImageUrl = (product ? jsonLdImageUrl(product) : undefined) ?? ogImage ?? undefined;
-  const imageUrl = rawImageUrl ? upgradeToHttps(rawImageUrl) : undefined;
-  const brand =
-    (product ? jsonLdBrandName(product) : undefined) ??
-    (description ? extractBrandFromDescription(description) : undefined);
-  const pieces =
-    extractPieceCount(name) ?? extractPieceCount(productUrl) ?? (description ? extractPieceCount(description) : undefined);
-
-  return {
-    found: true,
+  return extractGenericProduct(page, productUrl, {
     source: "puzzle.fr",
-    brand,
-    name,
-    pieces,
-    imageUrl,
-  };
+    stripTitleSuffix: stripPuzzleFrSiteSuffix,
+    brandFromDescription: extractBrandFromDescription,
+  });
 }
 
 /**
@@ -59,7 +23,7 @@ export async function extractProduct(page: Page, productUrl: string): Promise<Lo
  */
 export async function searchPuzzleFr(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
-    const found = await findPuzzleFrProductUrl(ean);
+    const found = await findProductUrlViaSerper(ean, "puzzle.fr", PUZZLE_FR_HOSTS);
     if (!found.url) {
       if (!found.errored) {
         console.warn(`puzzle.fr: no product found via Serper for ${ean}`);

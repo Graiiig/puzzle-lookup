@@ -1,4 +1,4 @@
-export type LookupSource = "puzzle.fr" | "ean-search.org";
+export type LookupSource = "puzzle.fr" | "philibertnet.com" | "ean-search.org";
 
 export interface LookupFound {
   found: true;

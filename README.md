@@ -1,8 +1,8 @@
 # puzzle-lookup
 
 Service HTTP indépendant : à partir d'un code-barre EAN, retourne les infos
-d'un puzzle (marque, nom, nombre de pièces, image) en scrapant deux sources
-publiques. Utilisé par l'app [puzzle-tracker](https://github.com/Graiiig/puzzle-tracker)
+d'un puzzle (marque, nom, nombre de pièces, image) en scrapant plusieurs
+sources publiques. Utilisé par l'app [puzzle-tracker](https://github.com/Graiiig/puzzle-tracker)
 (web + Android) pour pré-remplir le formulaire d'ajout après un scan caméra.
 
 ## API
@@ -38,8 +38,9 @@ GET /image?url=<url_de_l_image>
 Header: x-api-key: <clé partagée>
 ```
 
-Proxifie une image hébergée sur puzzle.fr (ex. l'`imageUrl` renvoyée par
-`/lookup` — ean-search.org ne renvoie jamais d'image) : renvoie les octets de
+Proxifie une image hébergée sur puzzle.fr ou Philibert (ex. l'`imageUrl`
+renvoyée par `/lookup` — ean-search.org ne renvoie jamais d'image) : renvoie
+les octets de
 l'image avec les bons headers CORS pour l'origine de puzzle-tracker. À
 utiliser côté client au lieu d'un `fetch()` direct de l'`imageUrl`, puisque
 cet hébergeur tiers n'est pas prévu pour être appelé en cross-origin depuis
@@ -62,17 +63,29 @@ un navigateur.
    `description` (qui suit un template stable : "... de marque X comprenant Y
    pièces ..."). Le nombre de pièces est aussi recherché par regex dans le
    slug d'URL.
-2. **ean-search.org** (si 1. ne trouve rien) : recherche l'EAN, extrait le nom
-   du premier résultat et, si présent, un lien externe vers un revendeur.
-   Nombre de pièces extrait par regex sur le nom (pas garanti). Le statut
-   HTTP de la réponse est vérifié avant toute extraction : ce site bloque
-   régulièrement les requêtes du serveur (page "Access denied", probablement
-   une réputation d'IP datacenter) — sans cette vérification, le code se
-   rabattait sur le `<h1>` de la page bloquée (le logo du site) et le
-   traitait comme un nom de produit valide.
-3. Sinon → `{ "found": false }`.
+2. **Philibert** (philibertnet.com, si 1. ne trouve rien) : spécialiste FR
+   jeux/puzzles, catalogue complémentaire à puzzle.fr. Même mécanique que
+   puzzle.fr — localisation via Serper (l'EAN apparaît directement dans
+   l'URL de ses pages produit, ex. `.../45151-level-up-4005556208654.html`,
+   donc bien indexé par Google), puis extraction JSON-LD/og:meta générique
+   (`extractGenericProduct`, partagée avec puzzle.fr). **Contrairement à
+   puzzle.fr**, la page produit est récupérée par navigation Playwright
+   directe (pas de ScraperAPI) — rien n'indique à ce stade que ce serveur
+   soit bloqué sur ce site ; à revoir si les tests en prod montrent le même
+   blocage que sur puzzle.fr. Sélecteurs/structure **non vérifiés** en
+   conditions réelles (voir "Sélecteurs à vérifier" plus bas) : ce site
+   n'est pas non plus accessible depuis l'environnement de dev.
+3. **ean-search.org** (si rien trouvé avant) : recherche l'EAN, extrait le
+   nom du premier résultat et, si présent, un lien externe vers un
+   revendeur. Nombre de pièces extrait par regex sur le nom (pas garanti).
+   Le statut HTTP de la réponse est vérifié avant toute extraction : ce
+   site bloque régulièrement les requêtes du serveur (page "Access denied",
+   probablement une réputation d'IP datacenter) — sans cette vérification,
+   le code se rabattait sur le `<h1>` de la page bloquée (le logo du site)
+   et le traitait comme un nom de produit valide.
+4. Sinon → `{ "found": false }`.
 
-### Recherche puzzle.fr via Serper
+### Recherche puzzle.fr / Philibert via Serper
 
 Google's own Custom Search JSON API (le choix initial) est fermée aux
 nouveaux projets depuis 2025 et sera totalement arrêtée en janvier 2027 — on
@@ -81,7 +94,9 @@ Google et renvoie de vrais résultats Google en JSON (ce n'est **pas** un
 produit Google officiel, juste un fournisseur qui s'appuie dessus). Serper
 n'a pas de paramètre dédié de restriction de site : l'opérateur `site:` est
 inclus directement dans la requête texte (`site:puzzle.fr <ean>`), exactement
-comme dans une recherche Google classique.
+comme dans une recherche Google classique. `findProductUrlViaSerper`
+(`src/sources/serperSearch.ts`) est générique — chaque source scrapée
+l'appelle avec son propre nom de domaine, pas seulement puzzle.fr.
 
 1. Créer un compte sur [serper.dev](https://serper.dev) et récupérer la clé
    API.
@@ -90,8 +105,8 @@ comme dans une recherche Google classique.
 Tier gratuit à l'inscription largement suffisant vu le volume réel (quelques
 nouveaux puzzles scannés par mois, le reste servi par le cache 30 jours) —
 l'usage ne devrait jamais dépasser le gratuit. Sans cette variable, la
-recherche puzzle.fr échoue systématiquement (`errored: true`, court TTL
-d'erreur) et chaque lookup passe directement à ean-search.org.
+recherche échoue systématiquement (`errored: true`, court TTL d'erreur) pour
+puzzle.fr et Philibert, et chaque lookup passe directement à ean-search.org.
 
 ### Récupération de la page produit via ScraperAPI
 
@@ -119,10 +134,10 @@ largement couvrir le volume réel de l'appli. Sans cette variable, la
 récupération de la page produit échoue systématiquement (`errored: true`)
 même quand Serper a bien trouvé l'URL.
 
-Le scraping passe par Playwright (Chromium headless) car les deux sites
+Le scraping passe par Playwright (Chromium headless) car ces sites
 bloquent les requêtes HTTP simples (403).
 
-Chaque source a un timeout (`SOURCE_TIMEOUT_MS`, 15s par défaut) : en cas de
+Chaque source a un timeout (`SOURCE_TIMEOUT_MS`, 40s par défaut) : en cas de
 dépassement, d'erreur, ou de structure de page imprévue, on passe à la source
 suivante sans planter.
 
@@ -135,18 +150,21 @@ transitoire du scraping plutôt qu'une vraie absence de résultat).
 ## ⚠️ Sélecteurs à vérifier avant mise en prod
 
 Ce service a été développé dans un environnement sandbox dont la politique
-réseau bloque les accès sortants vers puzzle.fr et ean-search.org. Les
-sélecteurs ont donc été ajustés a posteriori, en prod, avec l'aide de deux
-routes de debug (voir plus bas).
+réseau bloque les accès sortants vers puzzle.fr, Philibert et ean-search.org.
+Les sélecteurs ont donc été ajustés a posteriori, en prod, avec l'aide de
+deux routes de debug (voir plus bas).
 
 État actuel :
 - **puzzle.fr** : localisation de la page produit via Serper puis
   récupération de son HTML via ScraperAPI (voir les deux sections
-  ci-dessus, nécessite `SERPER_API_KEY` et `SCRAPERAPI_KEY`). Extraction
-  marque/nom/pièces/image avec plusieurs replis (JSON-LD → og:meta →
-  title/description), confirmée fonctionnelle en prod (le chemin
-  Serper→ScraperAPI, lui, reste à confirmer en conditions réelles une fois
-  `SCRAPERAPI_KEY` renseignée).
+  ci-dessus, nécessite `SERPER_API_KEY` et `SCRAPERAPI_KEY`). Chaîne
+  complète (Serper → ScraperAPI → extraction JSON-LD/og:meta) confirmée
+  fonctionnelle en prod de bout en bout.
+- **Philibert** : localisation via Serper puis navigation Playwright directe
+  (pas de ScraperAPI, voir "Logique de résolution" ci-dessus). **Pas encore
+  testé en prod** — sélecteurs et fiabilité de la navigation directe (vs.
+  besoin potentiel de ScraperAPI comme puzzle.fr) restent à confirmer, comme
+  puzzle.fr l'a été avant sa mise en prod initiale.
 - **ean-search.org** : bloque une bonne partie des requêtes en prod (page
   "Access denied", probablement une réputation d'IP datacenter) — détecté via
   le statut HTTP de la réponse plutôt que traité comme un résultat valide.
@@ -170,7 +188,7 @@ routes de debug (voir plus bas).
 
 2. Directement contre le service déployé (utile si pas d'accès Playwright en
    local), via les routes `/debug/html` et `/debug/screenshot` (protégées par
-   `x-api-key`, restreintes aux hosts puzzle.fr/ean-search.org) :
+   `x-api-key`, restreintes aux hosts puzzle.fr/Philibert/ean-search.org) :
    ```bash
    curl -H "x-api-key: <API_KEY>" \
      "https://<domaine>/debug/html?url=https%3A%2F%2Fwww.ean-search.org%2F%3Fq%3D<ean>" \

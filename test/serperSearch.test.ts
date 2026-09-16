@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { config } from "../src/config.js";
-import { findPuzzleFrProductUrl } from "../src/sources/serperSearch.js";
+import { findProductUrlViaSerper } from "../src/sources/serperSearch.js";
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = config.serperApiKey;
+
+const PUZZLE_FR_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr"]);
 
 beforeEach(() => {
   config.serperApiKey = "test-key";
@@ -15,7 +17,7 @@ afterEach(() => {
   config.serperApiKey = originalApiKey;
 });
 
-test("findPuzzleFrProductUrl picks the first result on a puzzle.fr host, regardless of URL shape", async () => {
+test("findProductUrlViaSerper picks the first result on an allowed host, regardless of URL shape", async () => {
   globalThis.fetch = (async (_input, init) => {
     const body = JSON.parse((init as RequestInit).body as string);
     assert.equal(body.q, "site:puzzle.fr 3663384337789");
@@ -30,12 +32,12 @@ test("findPuzzleFrProductUrl picks the first result on a puzzle.fr host, regardl
     );
   }) as typeof fetch;
 
-  const result = await findPuzzleFrProductUrl("3663384337789");
+  const result = await findProductUrlViaSerper("3663384337789", "puzzle.fr", PUZZLE_FR_HOSTS);
   assert.equal(result.url, "https://www.puzzle.fr/product/show/grafika-puzzle-rond-halloween-500-pieces");
   assert.equal(result.errored, false);
 });
 
-test("findPuzzleFrProductUrl skips a result on a host other than puzzle.fr", async () => {
+test("findProductUrlViaSerper skips a result on a host outside the allowed set", async () => {
   globalThis.fetch = (async () =>
     new Response(
       JSON.stringify({
@@ -44,31 +46,41 @@ test("findPuzzleFrProductUrl skips a result on a host other than puzzle.fr", asy
       { status: 200 },
     )) as typeof fetch;
 
-  const result = await findPuzzleFrProductUrl("3663384337789");
+  const result = await findProductUrlViaSerper("3663384337789", "puzzle.fr", PUZZLE_FR_HOSTS);
   assert.equal(result.url, undefined);
   assert.equal(result.errored, false);
 });
 
-test("findPuzzleFrProductUrl returns a clean miss (not errored) when nothing matches", async () => {
+test("findProductUrlViaSerper returns a clean miss (not errored) when nothing matches", async () => {
   globalThis.fetch = (async () => new Response(JSON.stringify({ organic: [] }), { status: 200 })) as typeof fetch;
 
-  const result = await findPuzzleFrProductUrl("0000000000000");
+  const result = await findProductUrlViaSerper("0000000000000", "puzzle.fr", PUZZLE_FR_HOSTS);
   assert.equal(result.url, undefined);
   assert.equal(result.errored, false);
 });
 
-test("findPuzzleFrProductUrl reports errored on a non-ok HTTP response", async () => {
+test("findProductUrlViaSerper reports errored on a non-ok HTTP response", async () => {
   globalThis.fetch = (async () => new Response("quota exceeded", { status: 429 })) as typeof fetch;
 
-  const result = await findPuzzleFrProductUrl("4005556197766");
+  const result = await findProductUrlViaSerper("4005556197766", "puzzle.fr", PUZZLE_FR_HOSTS);
   assert.equal(result.url, undefined);
   assert.equal(result.errored, true);
 });
 
-test("findPuzzleFrProductUrl reports errored when the API key isn't configured", async () => {
+test("findProductUrlViaSerper reports errored when the API key isn't configured", async () => {
   config.serperApiKey = "";
 
-  const result = await findPuzzleFrProductUrl("4005556197766");
+  const result = await findProductUrlViaSerper("4005556197766", "puzzle.fr", PUZZLE_FR_HOSTS);
   assert.equal(result.url, undefined);
   assert.equal(result.errored, true);
+});
+
+test("findProductUrlViaSerper restricts the query to the given site", async () => {
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse((init as RequestInit).body as string);
+    assert.equal(body.q, "site:philibertnet.com 3663384337789");
+    return new Response(JSON.stringify({ organic: [] }), { status: 200 });
+  }) as typeof fetch;
+
+  await findProductUrlViaSerper("3663384337789", "philibertnet.com", new Set(["www.philibertnet.com"]));
 });

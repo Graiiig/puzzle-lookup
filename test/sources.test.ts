@@ -5,6 +5,7 @@ import { after, before, test } from "node:test";
 import { chromium, type Browser, type Page } from "playwright";
 import { extractProduct } from "../src/sources/puzzleFr.js";
 import { findResultName, findVendorLink } from "../src/sources/eanSearch.js";
+import { extractGenericProduct } from "../src/sources/genericProductExtract.js";
 
 const fixturesDir = path.join(import.meta.dirname, "fixtures");
 
@@ -51,6 +52,22 @@ test("extractProduct falls back to <title>/description when no JSON-LD or og:met
   assert.equal(result.brand, "Trefl");
   assert.equal(result.pieces, 6000);
   assert.equal(result.name, "Puzzle Le Grand Livre de Disney Trefl-81037 6000 pièces Puzzles - Disney");
+});
+
+test("extractGenericProduct reads brand/name/pieces/image from JSON-LD, without any site-specific options", async () => {
+  await loadFixture("philibert-product.html");
+  const result = await extractGenericProduct(
+    page,
+    "https://www.philibertnet.com/fr/grafika/1234-puzzle-rond-halloween.html",
+    { source: "philibertnet.com" },
+  );
+  assert.ok(result?.found);
+  if (!result?.found) return;
+  assert.equal(result.source, "philibertnet.com");
+  assert.equal(result.brand, "Grafika");
+  assert.equal(result.name, "Puzzle Rond - Halloween - Grafika - 500 pieces");
+  assert.equal(result.pieces, 500);
+  assert.equal(result.imageUrl, "https://www.philibertnet.com/img/p/1/2/3/4/1234-large.jpg");
 });
 
 test("findResultName + findVendorLink read ean-search.org results", async () => {
