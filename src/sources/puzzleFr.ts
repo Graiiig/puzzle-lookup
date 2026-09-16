@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "playwright";
-import { config } from "../config.js";
+import { fetchViaScraperApi } from "../scraperApi.js";
 import {
   extractBrandFromDescription,
   extractPieceCount,
@@ -68,9 +68,18 @@ export async function searchPuzzleFr(ean: string, context: BrowserContext): Prom
     }
     const productUrl = found.url;
 
+    // Fetched through ScraperAPI's proxy pool rather than a direct
+    // page.goto() from this server — see fetchViaScraperApi's doc comment
+    // for why (this exact class of URL silently stalls when navigated to
+    // directly, despite loading instantly in a normal browser).
+    const fetched = await fetchViaScraperApi(productUrl);
+    if (!fetched.html) {
+      console.warn(`puzzle.fr: couldn't fetch ${productUrl} via ScraperAPI for ${ean}`);
+      return { found: false, errored: true };
+    }
+
     const page = await context.newPage();
-    await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
-    await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+    await page.setContent(fetched.html, { waitUntil: "domcontentloaded" });
 
     const extracted = await extractProduct(page, productUrl);
     if (extracted) return extracted;
