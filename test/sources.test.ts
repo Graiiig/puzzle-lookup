@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, type Browser, type Page } from "playwright";
-import { extractProduct, pickProductUrl } from "../src/sources/puzzleFr.js";
+import { extractProduct } from "../src/sources/puzzleFr.js";
 import { findResultName, findVendorLink } from "../src/sources/eanSearch.js";
 
 const fixturesDir = path.join(import.meta.dirname, "fixtures");
@@ -24,15 +24,6 @@ async function loadFixture(name: string): Promise<void> {
   const html = await readFile(path.join(fixturesDir, name), "utf8");
   await page.setContent(html);
 }
-
-test("pickProductUrl finds the puzzle.fr product link via URL convention", async () => {
-  await loadFixture("puzzlefr-search.html");
-  const url = await pickProductUrl(page);
-  assert.equal(
-    url,
-    "https://www.puzzle.fr/ravensburger-tour-eiffel-de-nuit-puzzle-1000-pieces.p58864.html",
-  );
-});
 
 test("extractProduct reads brand/name/pieces/image from JSON-LD", async () => {
   await loadFixture("puzzlefr-product.html");
@@ -68,4 +59,12 @@ test("findResultName + findVendorLink read ean-search.org results", async () => 
   const vendorUrl = await findVendorLink(page);
   assert.equal(name, "Ravensburger Tour Eiffel de nuit 1000 pieces");
   assert.equal(vendorUrl, "https://www.example-shop.com/product/58864");
+});
+
+test("findResultName ignores a bot-blocked page's own logo/heading text", async () => {
+  await page.setContent(
+    '<html><body><a class="logo"><h1>EAN-Search</h1></a><h1>Access denied</h1></body></html>',
+  );
+  const name = await findResultName(page);
+  assert.equal(name, undefined);
 });

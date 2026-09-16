@@ -26,6 +26,8 @@ const NOISE_TEXT = new Set([
   "api",
   "about",
   "privacy",
+  "ean-search",
+  "access denied",
 ]);
 
 function looksLikeProductName(text: string | null): text is string {
@@ -61,10 +63,18 @@ export async function findVendorLink(page: Page): Promise<string | undefined> {
 export async function searchEanSearch(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
     const page = await context.newPage();
-    await page.goto(`https://www.ean-search.org/?q=${encodeURIComponent(ean)}`, {
+    const response = await page.goto(`https://www.ean-search.org/?q=${encodeURIComponent(ean)}`, {
       waitUntil: "domcontentloaded",
       timeout: config.navTimeoutMs,
     });
+    // page.goto() doesn't throw on a non-2xx response — a bot-blocked request
+    // (seen in prod: a 200/403 "Access denied" page) would otherwise fall
+    // through to findResultName's <h1> fallback and pick up the site's own
+    // logo text as if it were a product name.
+    if (!response || !response.ok()) {
+      console.warn(`ean-search.org: blocked or errored for ${ean} (HTTP ${response?.status()})`);
+      return { found: false, errored: true };
+    }
     await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
     const name = await findResultName(page);

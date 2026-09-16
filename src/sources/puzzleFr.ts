@@ -7,56 +7,8 @@ import {
   upgradeToHttps,
 } from "../util.js";
 import type { LookupFound, SourceResult } from "../types.js";
+import { findPuzzleFrProductUrl } from "./googleSearch.js";
 import { jsonLdBrandName, jsonLdImageUrl, readProductJsonLd } from "./jsonld.js";
-
-/**
- * puzzle.fr runs on PrestaShop. Product URLs follow a documented convention
- * (`some-slug.p<id>.html`), which we rely on instead of guessing CSS classes
- * for the search results listing, since the exact theme markup could not be
- * verified from this environment (see README "Vérifier les sélecteurs").
- */
-const PRODUCT_URL_RE = /\.p\d+\.html(?:[?#].*)?$/i;
-
-function searchUrls(ean: string): string[] {
-  const q = encodeURIComponent(ean);
-  return [`https://www.puzzle.fr/recherche/${q}?src=1`];
-}
-
-/** Picks the first product link out of a rendered search results page. */
-export async function pickProductUrl(page: Page): Promise<string | undefined> {
-  const hrefs = await page.locator("a[href]").evaluateAll((els) =>
-    els.map((el) => (el as HTMLAnchorElement).href),
-  );
-  return hrefs.find((href) => PRODUCT_URL_RE.test(href));
-}
-
-interface ProductUrlOutcome {
-  url?: string;
-  /** True if at least one candidate URL failed to navigate (vs. loading fine and finding nothing). */
-  errored: boolean;
-}
-
-async function findProductUrl(page: Page, ean: string): Promise<ProductUrlOutcome> {
-  let errored = false;
-  for (const url of searchUrls(ean)) {
-    try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
-      await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
-    } catch (err) {
-      console.warn(`puzzle.fr: navigation to ${url} failed:`, (err as Error).message);
-      errored = true;
-      continue;
-    }
-
-    // A single matching product makes puzzle.fr redirect straight to it,
-    // instead of showing a results listing with product links to scan.
-    if (PRODUCT_URL_RE.test(page.url())) return { url: page.url(), errored };
-
-    const productUrl = await pickProductUrl(page);
-    if (productUrl) return { url: productUrl, errored };
-  }
-  return { errored };
-}
 
 /** Extracts product fields from an already-loaded product page. */
 export async function extractProduct(page: Page, productUrl: string): Promise<LookupFound | null> {
@@ -107,23 +59,18 @@ export async function extractProduct(page: Page, productUrl: string): Promise<Lo
  */
 export async function searchPuzzleFr(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
-    const page = await context.newPage();
-    const found = await findProductUrl(page, ean);
+    const found = await findPuzzleFrProductUrl(ean);
     if (!found.url) {
       if (!found.errored) {
-        console.warn(`puzzle.fr: no product link found for ${ean} (page loaded, no match)`);
+        console.warn(`puzzle.fr: no product found via Google CSE for ${ean}`);
       }
       return { found: false, errored: found.errored };
     }
     const productUrl = found.url;
 
-    // A single-result search already redirects to this exact page — skip a
-    // redundant second full navigation (product pages are image/script-heavy
-    // enough that this alone can burn the whole per-source timeout budget).
-    if (page.url() !== productUrl) {
-      await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
-      await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
-    }
+    const page = await context.newPage();
+    await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+    await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
     const extracted = await extractProduct(page, productUrl);
     if (extracted) return extracted;
