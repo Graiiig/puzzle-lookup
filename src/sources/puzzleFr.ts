@@ -7,7 +7,7 @@ import {
   upgradeToHttps,
 } from "../util.js";
 import type { LookupFound, SourceResult } from "../types.js";
-import { findPuzzleFrProductUrl } from "./googleSearch.js";
+import { findPuzzleFrProductUrl } from "./serperSearch.js";
 import { jsonLdBrandName, jsonLdImageUrl, readProductJsonLd } from "./jsonld.js";
 
 /** Extracts product fields from an already-loaded product page. */
@@ -62,7 +62,7 @@ export async function searchPuzzleFr(ean: string, context: BrowserContext): Prom
     const found = await findPuzzleFrProductUrl(ean);
     if (!found.url) {
       if (!found.errored) {
-        console.warn(`puzzle.fr: no product found via Google CSE for ${ean}`);
+        console.warn(`puzzle.fr: no product found via Serper for ${ean}`);
       }
       return { found: false, errored: found.errored };
     }
