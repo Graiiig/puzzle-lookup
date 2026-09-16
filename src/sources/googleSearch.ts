@@ -1,7 +1,15 @@
 import { config } from "../config.js";
-import { PUZZLE_FR_PRODUCT_URL_RE } from "../util.js";
 
 const SEARCH_TIMEOUT_MS = 8000;
+
+// puzzle.fr product URLs have carried more than one format in the wild
+// (`some-slug.p<id>.html` and `/product/show/<slug>`, seen back to back on
+// the same product a day apart) — a shape-based filter proved too brittle
+// (it silently discarded a correct, Google-verified result). Trust the top
+// hit for a site-restricted, EAN-exact query instead, and just re-check the
+// hostname as a defense-in-depth guard before ever navigating a browser
+// there (the API response is external input).
+const PUZZLE_FR_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr"]);
 
 interface GoogleCseOutcome {
   url?: string;
@@ -48,7 +56,13 @@ export async function findPuzzleFrProductUrl(ean: string): Promise<GoogleCseOutc
       return { errored: true };
     }
     const data = (await res.json()) as GoogleCseResponse;
-    const match = data.items?.find((item) => PUZZLE_FR_PRODUCT_URL_RE.test(item.link));
+    const match = data.items?.find((item) => {
+      try {
+        return PUZZLE_FR_HOSTS.has(new URL(item.link).hostname);
+      } catch {
+        return false;
+      }
+    });
     return { url: match?.link, errored: false };
   } catch (err) {
     console.warn(`google cse: search failed for ${ean}:`, (err as Error).message);
