@@ -47,20 +47,43 @@ un navigateur.
 
 ## Logique de résolution
 
-1. **puzzle.fr** : recherche l'EAN via `https://www.puzzle.fr/recherche/<ean>?src=1`
-   (URL confirmée en prod — pas de blocage Cloudflare observé, la page se
-   rend normalement), prend le premier lien produit trouvé sur la page de
-   résultats (repéré via la convention d'URL `...p<id>.html`, pas via des
-   classes CSS), puis extrait marque/nom/image via les données structurées
-   `schema.org/Product` (JSON-LD) de la page produit si présentes, avec
-   repli sur les meta `og:title` / `og:image`, puis sur le `<title>` et la
-   meta `description` (qui suit un template stable : "... de marque X
-   comprenant Y pièces ..."). Le nombre de pièces est aussi recherché par
-   regex dans le slug d'URL.
+1. **puzzle.fr** : la recherche interne de puzzle.fr n'indexe **pas** les
+   produits par EAN — confirmé en testant `https://www.puzzle.fr/recherche?q=<ean>`
+   à la main avec l'EAN d'un produit existant et bien établi sur le site
+   ("0 Produits trouvés"). On localise donc la page produit via l'**API
+   Google Custom Search** restreinte à `puzzle.fr` (voir "Recherche puzzle.fr
+   via Google" ci-dessous), l'EAN étant affiché dans la fiche technique de
+   chaque page produit et donc indexé par Google. Une fois l'URL du produit
+   trouvée, on extrait marque/nom/image via les données structurées
+   `schema.org/Product` (JSON-LD) de la page si présentes, avec repli sur les
+   meta `og:title` / `og:image`, puis sur le `<title>` et la meta
+   `description` (qui suit un template stable : "... de marque X comprenant Y
+   pièces ..."). Le nombre de pièces est aussi recherché par regex dans le
+   slug d'URL.
 2. **ean-search.org** (si 1. ne trouve rien) : recherche l'EAN, extrait le nom
    du premier résultat et, si présent, un lien externe vers un revendeur.
-   Nombre de pièces extrait par regex sur le nom (pas garanti).
+   Nombre de pièces extrait par regex sur le nom (pas garanti). Le statut
+   HTTP de la réponse est vérifié avant toute extraction : ce site bloque
+   régulièrement les requêtes du serveur (page "Access denied", probablement
+   une réputation d'IP datacenter) — sans cette vérification, le code se
+   rabattait sur le `<h1>` de la page bloquée (le logo du site) et le
+   traitait comme un nom de produit valide.
 3. Sinon → `{ "found": false }`.
+
+### Recherche puzzle.fr via Google
+
+1. Créer une clé API sur [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   (activer l'API "Custom Search API" sur le projet).
+2. Créer un moteur de recherche sur [Programmable Search Engine](https://programmablesearchengine.google.com/)
+   — peu importe la config de site puisque la requête restreint déjà les
+   résultats à `puzzle.fr` via les paramètres `siteSearch`/`siteSearchFilter`
+   — puis récupérer son ID (`cx`).
+3. Renseigner `GOOGLE_CSE_API_KEY` et `GOOGLE_CSE_CX` (voir `.env.example`).
+
+Gratuit jusqu'à 100 requêtes/jour, largement suffisant vu le cache 30 jours
+sur les résultats trouvés. Sans ces variables, la recherche puzzle.fr échoue
+systématiquement (`errored: true`, court TTL d'erreur) et chaque lookup passe
+directement à ean-search.org.
 
 Le scraping passe par Playwright (Chromium headless) car les deux sites
 bloquent les requêtes HTTP simples (403).
@@ -83,23 +106,26 @@ sélecteurs ont donc été ajustés a posteriori, en prod, avec l'aide de deux
 routes de debug (voir plus bas).
 
 État actuel :
-- **puzzle.fr** : URL de recherche et repérage du lien produit confirmés
-  fonctionnels en prod (voir ci-dessus). Extraction marque/nom/pièces/image
-  avec plusieurs replis (JSON-LD → og:meta → title/description) — pas encore
-  confirmé lequel de ces chemins est réellement emprunté sur ce site (JSON-LD
-  semble absent d'après un premier test).
-- **ean-search.org** : pas encore vérifié en prod. L'extraction utilise une
-  liste de sélecteurs candidats (`src/sources/eanSearch.ts`,
-  `RESULT_NAME_SELECTORS`) essayés dans l'ordre, avec repli sur le `<title>`
-  de la page — à confirmer/ajuster.
+- **puzzle.fr** : localisation de la page produit via Google CSE (voir
+  "Recherche puzzle.fr via Google" ci-dessus, nécessite `GOOGLE_CSE_API_KEY`/
+  `GOOGLE_CSE_CX`). Extraction marque/nom/pièces/image avec plusieurs replis
+  (JSON-LD → og:meta → title/description), confirmée fonctionnelle en prod.
+- **ean-search.org** : bloque une bonne partie des requêtes en prod (page
+  "Access denied", probablement une réputation d'IP datacenter) — détecté via
+  le statut HTTP de la réponse plutôt que traité comme un résultat valide.
+  Quand une requête passe, l'extraction utilise une liste de sélecteurs
+  candidats (`src/sources/eanSearch.ts`, `RESULT_NAME_SELECTORS`) essayés
+  dans l'ordre, avec repli sur le `<h1>`/`<title>` de la page — pas encore
+  confirmé lequel de ces chemins est réellement emprunté sur une vraie page
+  de résultats (seule la page de blocage a pu être observée jusqu'ici).
 - Dans tous les cas, toute erreur ou structure inattendue fait échouer la
-  source silencieusement (retour `null`) plutôt que de planter.
+  source silencieusement (`found: false`) plutôt que de planter.
 
 **Pour ajuster ces sélecteurs**, deux options :
 
 1. Depuis une machine avec accès internet (locale ou VPS) :
    ```bash
-   npm run inspect -- "https://www.puzzle.fr/recherche/<un_ean_connu>?src=1"
+   npm run inspect -- "https://www.puzzle.fr/<slug-produit-connu>.p<id>.html"
    npm run inspect -- "https://www.ean-search.org/?q=<un_ean_connu>"
    ```
    Ça ouvre un vrai Chromium (non-headless) et sauvegarde `debug/page.html` +
@@ -110,10 +136,10 @@ routes de debug (voir plus bas).
    `x-api-key`, restreintes aux hosts puzzle.fr/ean-search.org) :
    ```bash
    curl -H "x-api-key: <API_KEY>" \
-     "https://<domaine>/debug/html?url=https%3A%2F%2Fwww.puzzle.fr%2Frecherche%2F<ean>%3Fsrc%3D1" \
+     "https://<domaine>/debug/html?url=https%3A%2F%2Fwww.ean-search.org%2F%3Fq%3D<ean>" \
      -o page.html
    curl -H "x-api-key: <API_KEY>" \
-     "https://<domaine>/debug/screenshot?url=https%3A%2F%2Fwww.puzzle.fr%2Frecherche%2F<ean>%3Fsrc%3D1" \
+     "https://<domaine>/debug/screenshot?url=https%3A%2F%2Fwww.ean-search.org%2F%3Fq%3D<ean>" \
      -o page.png
    ```
 
@@ -147,7 +173,9 @@ npm test        # tests unitaires (regex pièces) + tests d'extraction sur fixtu
 1. Connecter ce repo Git dans Coolify. Le `Dockerfile` est détecté
    automatiquement (build/déploiement à chaque push, webhook standard).
 2. Variables d'environnement à définir dans Coolify (voir `.env.example`) :
-   au minimum `API_KEY`. `PORT`/`HOST` peuvent rester par défaut.
+   `API_KEY`, ainsi que `GOOGLE_CSE_API_KEY`/`GOOGLE_CSE_CX` (voir "Recherche
+   puzzle.fr via Google" — sans ça, puzzle.fr ne renverra jamais aucun
+   résultat). `PORT`/`HOST` peuvent rester par défaut.
 3. Démarrer en exposant IP:port pour tester, puis brancher un (sous-)domaine
    + HTTPS (géré automatiquement par Coolify) une fois validé.
 4. `GET /health` peut servir de healthcheck Coolify.

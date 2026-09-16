@@ -1,3 +1,11 @@
+/**
+ * puzzle.fr product URLs follow a documented convention (`some-slug.p<id>.html`).
+ * Shared between puzzleFr.ts (page extraction) and googleSearch.ts (picking the
+ * right search result out of a site-restricted Google query), so it lives here
+ * instead of in either — importing across those two would be circular.
+ */
+export const PUZZLE_FR_PRODUCT_URL_RE = /\.p\d+\.html(?:[?#].*)?$/i;
+
 /** Matches "1000 pieces", "1000pcs", "1000-pieces" etc. in a product name/slug. */
 const PIECE_COUNT_RE = /(\d{2,5})\s*[-\s]?(?:pi[eè]ces?|pcs)\b/i;
 
