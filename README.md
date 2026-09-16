@@ -53,8 +53,10 @@ un navigateur.
    ("0 Produits trouvés"). On localise donc la page produit via **Serper**
    (voir "Recherche puzzle.fr via Serper" ci-dessous), restreint à
    `puzzle.fr`, l'EAN étant affiché dans la fiche technique de chaque page
-   produit et donc indexé par Google. Une fois l'URL du produit
-   trouvée, on extrait marque/nom/image via les données structurées
+   produit et donc indexé par Google. Une fois l'URL du produit trouvée, son
+   HTML est récupéré via **ScraperAPI** plutôt que par une navigation directe
+   de ce serveur (voir "Récupération de la page produit via ScraperAPI"),
+   puis on extrait marque/nom/image via les données structurées
    `schema.org/Product` (JSON-LD) de la page si présentes, avec repli sur les
    meta `og:title` / `og:image`, puis sur le `<title>` et la meta
    `description` (qui suit un template stable : "... de marque X comprenant Y
@@ -91,6 +93,32 @@ l'usage ne devrait jamais dépasser le gratuit. Sans cette variable, la
 recherche puzzle.fr échoue systématiquement (`errored: true`, court TTL
 d'erreur) et chaque lookup passe directement à ean-search.org.
 
+### Récupération de la page produit via ScraperAPI
+
+Une fois l'URL du produit connue via Serper, son HTML n'est **pas** récupéré
+en y naviguant directement depuis ce serveur — testé en conditions réelles :
+la page produit exacte visée par un lookup timeout systématiquement (10s,
+`page.goto` n'atteint jamais `domcontentloaded`) depuis ce serveur, alors
+qu'elle se charge instantanément dans un navigateur normal. Même classe de
+problème que le blocage d'ean-search.org (probablement une réputation d'IP
+datacenter), mais qui se manifeste ici par un silence complet plutôt qu'un
+403 explicite.
+
+[ScraperAPI](https://www.scraperapi.com/) (rotation de proxy + contournement
+anti-bot) sert d'intermédiaire à la place : `GET api.scraperapi.com?api_key=<clé>&url=<url_produit>`
+renvoie le HTML final, qui est ensuite injecté dans une page Playwright
+locale (`page.setContent`) pour réutiliser tel quel le code d'extraction
+JSON-LD/og:meta existant.
+
+1. Créer un compte sur [scraperapi.com](https://www.scraperapi.com/) et
+   récupérer la clé API.
+2. Renseigner `SCRAPERAPI_KEY` (voir `.env.example`).
+
+Comme pour Serper, le tier gratuit à l'inscription (1000 crédits) devrait
+largement couvrir le volume réel de l'appli. Sans cette variable, la
+récupération de la page produit échoue systématiquement (`errored: true`)
+même quand Serper a bien trouvé l'URL.
+
 Le scraping passe par Playwright (Chromium headless) car les deux sites
 bloquent les requêtes HTTP simples (403).
 
@@ -112,10 +140,13 @@ sélecteurs ont donc été ajustés a posteriori, en prod, avec l'aide de deux
 routes de debug (voir plus bas).
 
 État actuel :
-- **puzzle.fr** : localisation de la page produit via Serper (voir
-  "Recherche puzzle.fr via Serper" ci-dessus, nécessite `SERPER_API_KEY`).
-  Extraction marque/nom/pièces/image avec plusieurs replis
-  (JSON-LD → og:meta → title/description), confirmée fonctionnelle en prod.
+- **puzzle.fr** : localisation de la page produit via Serper puis
+  récupération de son HTML via ScraperAPI (voir les deux sections
+  ci-dessus, nécessite `SERPER_API_KEY` et `SCRAPERAPI_KEY`). Extraction
+  marque/nom/pièces/image avec plusieurs replis (JSON-LD → og:meta →
+  title/description), confirmée fonctionnelle en prod (le chemin
+  Serper→ScraperAPI, lui, reste à confirmer en conditions réelles une fois
+  `SCRAPERAPI_KEY` renseignée).
 - **ean-search.org** : bloque une bonne partie des requêtes en prod (page
   "Access denied", probablement une réputation d'IP datacenter) — détecté via
   le statut HTTP de la réponse plutôt que traité comme un résultat valide.
@@ -179,8 +210,9 @@ npm test        # tests unitaires (regex pièces) + tests d'extraction sur fixtu
 1. Connecter ce repo Git dans Coolify. Le `Dockerfile` est détecté
    automatiquement (build/déploiement à chaque push, webhook standard).
 2. Variables d'environnement à définir dans Coolify (voir `.env.example`) :
-   `API_KEY`, ainsi que `SERPER_API_KEY` (voir "Recherche
-   puzzle.fr via Serper" — sans ça, puzzle.fr ne renverra jamais aucun
+   `API_KEY`, ainsi que `SERPER_API_KEY` et `SCRAPERAPI_KEY` (voir les
+   sections "Recherche puzzle.fr via Serper" et "Récupération de la page
+   produit via ScraperAPI" — sans elles, puzzle.fr ne renverra jamais aucun
    résultat). `PORT`/`HOST` peuvent rester par défaut.
 3. Démarrer en exposant IP:port pour tester, puis brancher un (sous-)domaine
    + HTTPS (géré automatiquement par Coolify) une fois validé.

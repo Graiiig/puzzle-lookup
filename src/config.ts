@@ -46,6 +46,13 @@ export const config = {
   // used instead to locate the product page, since the EAN is printed in
   // every product's spec table and gets indexed.
   serperApiKey: process.env.SERPER_API_KEY ?? "",
+  // Once the product URL is known, ScraperAPI (scraperapi.com) fetches its
+  // HTML instead of this server navigating there directly — puzzle.fr
+  // silently stalls direct requests from this server's datacenter IP on
+  // product pages (confirmed: the exact URL that always timed out here
+  // loaded instantly in a normal browser), and ScraperAPI's rotating proxy
+  // pool isn't tied to that IP.
+  scraperApiKey: process.env.SCRAPERAPI_KEY ?? "",
 };
 
 export function assertConfig(): void {
