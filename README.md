@@ -50,10 +50,10 @@ un navigateur.
 1. **puzzle.fr** : la recherche interne de puzzle.fr n'indexe **pas** les
    produits par EAN — confirmé en testant `https://www.puzzle.fr/recherche?q=<ean>`
    à la main avec l'EAN d'un produit existant et bien établi sur le site
-   ("0 Produits trouvés"). On localise donc la page produit via l'**API
-   Google Custom Search** restreinte à `puzzle.fr` (voir "Recherche puzzle.fr
-   via Google" ci-dessous), l'EAN étant affiché dans la fiche technique de
-   chaque page produit et donc indexé par Google. Une fois l'URL du produit
+   ("0 Produits trouvés"). On localise donc la page produit via **Serper**
+   (voir "Recherche puzzle.fr via Serper" ci-dessous), restreint à
+   `puzzle.fr`, l'EAN étant affiché dans la fiche technique de chaque page
+   produit et donc indexé par Google. Une fois l'URL du produit
    trouvée, on extrait marque/nom/image via les données structurées
    `schema.org/Product` (JSON-LD) de la page si présentes, avec repli sur les
    meta `og:title` / `og:image`, puis sur le `<title>` et la meta
@@ -70,20 +70,26 @@ un navigateur.
    traitait comme un nom de produit valide.
 3. Sinon → `{ "found": false }`.
 
-### Recherche puzzle.fr via Google
+### Recherche puzzle.fr via Serper
 
-1. Créer une clé API sur [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-   (activer l'API "Custom Search API" sur le projet).
-2. Créer un moteur de recherche sur [Programmable Search Engine](https://programmablesearchengine.google.com/)
-   — peu importe la config de site puisque la requête restreint déjà les
-   résultats à `puzzle.fr` via les paramètres `siteSearch`/`siteSearchFilter`
-   — puis récupérer son ID (`cx`).
-3. Renseigner `GOOGLE_CSE_API_KEY` et `GOOGLE_CSE_CX` (voir `.env.example`).
+Google's own Custom Search JSON API (le choix initial) est fermée aux
+nouveaux projets depuis 2025 et sera totalement arrêtée en janvier 2027 — on
+utilise donc [Serper](https://serper.dev), un tiers payant qui interroge
+Google et renvoie de vrais résultats Google en JSON (ce n'est **pas** un
+produit Google officiel, juste un fournisseur qui s'appuie dessus). Serper
+n'a pas de paramètre dédié de restriction de site : l'opérateur `site:` est
+inclus directement dans la requête texte (`site:puzzle.fr <ean>`), exactement
+comme dans une recherche Google classique.
 
-Gratuit jusqu'à 100 requêtes/jour, largement suffisant vu le cache 30 jours
-sur les résultats trouvés. Sans ces variables, la recherche puzzle.fr échoue
-systématiquement (`errored: true`, court TTL d'erreur) et chaque lookup passe
-directement à ean-search.org.
+1. Créer un compte sur [serper.dev](https://serper.dev) et récupérer la clé
+   API.
+2. Renseigner `SERPER_API_KEY` (voir `.env.example`).
+
+Tier gratuit à l'inscription largement suffisant vu le volume réel (quelques
+nouveaux puzzles scannés par mois, le reste servi par le cache 30 jours) —
+l'usage ne devrait jamais dépasser le gratuit. Sans cette variable, la
+recherche puzzle.fr échoue systématiquement (`errored: true`, court TTL
+d'erreur) et chaque lookup passe directement à ean-search.org.
 
 Le scraping passe par Playwright (Chromium headless) car les deux sites
 bloquent les requêtes HTTP simples (403).
@@ -106,9 +112,9 @@ sélecteurs ont donc été ajustés a posteriori, en prod, avec l'aide de deux
 routes de debug (voir plus bas).
 
 État actuel :
-- **puzzle.fr** : localisation de la page produit via Google CSE (voir
-  "Recherche puzzle.fr via Google" ci-dessus, nécessite `GOOGLE_CSE_API_KEY`/
-  `GOOGLE_CSE_CX`). Extraction marque/nom/pièces/image avec plusieurs replis
+- **puzzle.fr** : localisation de la page produit via Serper (voir
+  "Recherche puzzle.fr via Serper" ci-dessus, nécessite `SERPER_API_KEY`).
+  Extraction marque/nom/pièces/image avec plusieurs replis
   (JSON-LD → og:meta → title/description), confirmée fonctionnelle en prod.
 - **ean-search.org** : bloque une bonne partie des requêtes en prod (page
   "Access denied", probablement une réputation d'IP datacenter) — détecté via
@@ -173,8 +179,8 @@ npm test        # tests unitaires (regex pièces) + tests d'extraction sur fixtu
 1. Connecter ce repo Git dans Coolify. Le `Dockerfile` est détecté
    automatiquement (build/déploiement à chaque push, webhook standard).
 2. Variables d'environnement à définir dans Coolify (voir `.env.example`) :
-   `API_KEY`, ainsi que `GOOGLE_CSE_API_KEY`/`GOOGLE_CSE_CX` (voir "Recherche
-   puzzle.fr via Google" — sans ça, puzzle.fr ne renverra jamais aucun
+   `API_KEY`, ainsi que `SERPER_API_KEY` (voir "Recherche
+   puzzle.fr via Serper" — sans ça, puzzle.fr ne renverra jamais aucun
    résultat). `PORT`/`HOST` peuvent rester par défaut.
 3. Démarrer en exposant IP:port pour tester, puis brancher un (sous-)domaine
    + HTTPS (géré automatiquement par Coolify) une fois validé.

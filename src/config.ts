@@ -40,11 +40,12 @@ export const config = {
     .filter(Boolean),
   // puzzle.fr's own on-site search doesn't index products by EAN (confirmed:
   // searching a valid EAN there returns 0 results even for long-established
-  // products) — Google Custom Search, restricted to puzzle.fr, is used
-  // instead to locate the product page, since the EAN is printed in every
-  // product's spec table and gets indexed. Free tier: 100 queries/day.
-  googleCseApiKey: process.env.GOOGLE_CSE_API_KEY ?? "",
-  googleCseCx: process.env.GOOGLE_CSE_CX ?? "",
+  // products) — Serper (serper.dev, a third-party proxy over real Google
+  // results — Google's own Custom Search JSON API is closed to new
+  // projects since 2025) restricted to puzzle.fr via a site: operator is
+  // used instead to locate the product page, since the EAN is printed in
+  // every product's spec table and gets indexed.
+  serperApiKey: process.env.SERPER_API_KEY ?? "",
 };
 
 export function assertConfig(): void {
