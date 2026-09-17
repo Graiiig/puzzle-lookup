@@ -25,8 +25,8 @@ function byteLimiter(maxBytes: number): Transform {
 }
 
 /**
- * Proxies an image (only puzzle.fr today — ean-search.org's results never
- * carry an imageUrl, see allowedHosts.ts) through this server, so the
+ * Proxies an image (puzzle.fr or Philibert today — ean-search.org's results
+ * never carry an imageUrl, see allowedHosts.ts) through this server, so the
  * frontend can fetch() it without depending on that third-party host
  * sending CORS headers of its own (it generally won't — that host was
  * never designed to be fetched cross-origin from a browser app).

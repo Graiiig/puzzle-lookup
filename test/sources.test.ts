@@ -4,7 +4,7 @@ import path from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, type Browser, type Page } from "playwright";
 import { extractProduct } from "../src/sources/puzzleFr.js";
-import { findResultName, findVendorLink } from "../src/sources/eanSearch.js";
+import { extractGenericProduct } from "../src/sources/genericProductExtract.js";
 
 const fixturesDir = path.join(import.meta.dirname, "fixtures");
 
@@ -53,18 +53,18 @@ test("extractProduct falls back to <title>/description when no JSON-LD or og:met
   assert.equal(result.name, "Puzzle Le Grand Livre de Disney Trefl-81037 6000 pièces Puzzles - Disney");
 });
 
-test("findResultName + findVendorLink read ean-search.org results", async () => {
-  await loadFixture("eansearch-results.html");
-  const name = await findResultName(page);
-  const vendorUrl = await findVendorLink(page);
-  assert.equal(name, "Ravensburger Tour Eiffel de nuit 1000 pieces");
-  assert.equal(vendorUrl, "https://www.example-shop.com/product/58864");
-});
-
-test("findResultName ignores a bot-blocked page's own logo/heading text", async () => {
-  await page.setContent(
-    '<html><body><a class="logo"><h1>EAN-Search</h1></a><h1>Access denied</h1></body></html>',
+test("extractGenericProduct reads brand/name/pieces/image from JSON-LD, without any site-specific options", async () => {
+  await loadFixture("philibert-product.html");
+  const result = await extractGenericProduct(
+    page,
+    "https://www.philibertnet.com/fr/grafika/1234-puzzle-rond-halloween.html",
+    { source: "philibertnet.com" },
   );
-  const name = await findResultName(page);
-  assert.equal(name, undefined);
+  assert.ok(result?.found);
+  if (!result?.found) return;
+  assert.equal(result.source, "philibertnet.com");
+  assert.equal(result.brand, "Grafika");
+  assert.equal(result.name, "Puzzle Rond - Halloween - Grafika - 500 pieces");
+  assert.equal(result.pieces, 500);
+  assert.equal(result.imageUrl, "https://www.philibertnet.com/img/p/1/2/3/4/1234-large.jpg");
 });

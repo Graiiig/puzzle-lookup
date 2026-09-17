@@ -4,16 +4,19 @@
  * open SSRF proxy even behind the API key. Both are exact-match, deliberately
  * not a subdomain wildcard: add a specific hostname here if another one is
  * needed rather than widening to a whole root domain — a subdomain takeover
- * of some unrelated, forgotten host under puzzle.fr/ean-search.org shouldn't
- * automatically gain access to either endpoint.
+ * of some unrelated, forgotten host under puzzle.fr/philibertnet.com
+ * shouldn't automatically gain access to either endpoint.
  *
  * Image hosts include both www.puzzle.fr (og:image/JSON-LD image can point
  * at the product page's own domain) and data.puzzle.fr (the asset CDN seen
  * on a real lookup) — extraction hasn't been observed to pin down exactly
- * one of these consistently, so both are allowed.
+ * one of these consistently, so both are allowed. www.philibertnet.com is
+ * unverified (see README "Sélecteurs à vérifier") — added on the same
+ * assumption as puzzle.fr's own domain until real-world testing shows a
+ * separate asset CDN is used instead.
  */
-const EXACT_SEARCH_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr", "www.ean-search.org", "ean-search.org"]);
-const EXACT_IMAGE_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr", "data.puzzle.fr"]);
+const EXACT_SEARCH_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr", "www.philibertnet.com", "philibertnet.com"]);
+const EXACT_IMAGE_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr", "data.puzzle.fr", "www.philibertnet.com"]);
 
 export function isAllowedSearchHost(hostname: string): boolean {
   return EXACT_SEARCH_HOSTS.has(hostname);

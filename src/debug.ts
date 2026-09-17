@@ -43,7 +43,7 @@ async function renderAllowedUrl<T>(
 
 /**
  * Manual tuning helper for environments (like this VPS) that have network
- * access to puzzle.fr/ean-search.org but no local Playwright setup. Same
+ * access to puzzle.fr/Philibert but no local Playwright setup. Same
  * purpose as scripts/inspect.ts, exposed over HTTP instead.
  */
 export function registerDebugRoutes(app: FastifyInstance): void {
