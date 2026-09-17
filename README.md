@@ -157,10 +157,12 @@ debug (voir plus bas).
   complète (Serper → ScraperAPI → extraction JSON-LD/og:meta) confirmée
   fonctionnelle en prod de bout en bout.
 - **Philibert** : localisation via Serper puis navigation Playwright directe
-  (pas de ScraperAPI, voir "Logique de résolution" ci-dessus). **Pas encore
-  testé en prod** — sélecteurs et fiabilité de la navigation directe (vs.
-  besoin potentiel de ScraperAPI comme puzzle.fr) restent à confirmer, comme
-  puzzle.fr l'a été avant sa mise en prod initiale.
+  (pas de ScraperAPI, voir "Logique de résolution" ci-dessus). Chaîne
+  complète confirmée fonctionnelle en prod de bout en bout — la navigation
+  directe suffit, pas de blocage IP observé comme sur puzzle.fr. Nom/pièces/
+  image extraits correctement ; `brand` en revanche pas encore vu renseigné
+  sur un vrai produit (JSON-LD sans doute sans champ `brand` sur ce site, ou
+  ailleurs dans la page — pas creusé plus, à revoir si besoin).
 - Dans tous les cas, toute erreur ou structure inattendue fait échouer la
   source silencieusement (`found: false`) plutôt que de planter.
 
