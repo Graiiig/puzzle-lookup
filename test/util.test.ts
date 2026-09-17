@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   extractBrandFromDescription,
   extractPieceCount,
+  stripPhilibertImageFormat,
   stripPuzzleFrSiteSuffix,
   upgradeToHttps,
 } from "../src/util.js";
@@ -35,6 +36,26 @@ test("stripPuzzleFrSiteSuffix removes the trailing site name", () => {
   assert.equal(
     stripPuzzleFrSiteSuffix("Tour Eiffel de nuit - Puzzle.fr/Planet'Puzzles"),
     "Tour Eiffel de nuit",
+  );
+});
+
+test("stripPhilibertImageFormat drops the low-res thumbnail suffix", () => {
+  assert.equal(
+    stripPhilibertImageFormat(
+      "https://cdn1.philibertnet.com/827348-cart_default/puzzle-parc-national-de-zion-500-pieces-4005555018889.jpg",
+    ),
+    "https://cdn1.philibertnet.com/827348/puzzle-parc-national-de-zion-500-pieces-4005555018889.jpg",
+  );
+});
+
+test("stripPhilibertImageFormat leaves non-Philibert or already-full-size URLs untouched", () => {
+  assert.equal(
+    stripPhilibertImageFormat("https://cdn1.philibertnet.com/827348/puzzle-parc-national-de-zion.jpg"),
+    "https://cdn1.philibertnet.com/827348/puzzle-parc-national-de-zion.jpg",
+  );
+  assert.equal(
+    stripPhilibertImageFormat("https://data.puzzle.fr/m82/p102850/p1.jpg"),
+    "https://data.puzzle.fr/m82/p102850/p1.jpg",
   );
 });
 

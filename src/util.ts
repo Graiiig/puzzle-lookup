@@ -35,6 +35,22 @@ export function upgradeToHttps(url: string): string {
 }
 
 /**
+ * Philibert's image CDN paths carry an optional "-<format>" suffix after
+ * the numeric id (e.g. "827348-cart_default", a small cart-thumbnail
+ * variant) — the page's own og:image/JSON-LD points at this low-res
+ * variant rather than the original. Dropping the suffix entirely (confirmed
+ * on a real lookup: "827348-cart_default/..." -> "827348/...") lands on the
+ * full-size image. Left untouched if the URL doesn't look like a Philibert
+ * CDN path with a format suffix.
+ */
+const PHILIBERT_IMAGE_FORMAT_RE = /^(https:\/\/cdn1\.philibertnet\.com\/\d+)-[a-z_]+(\/.*)$/i;
+
+export function stripPhilibertImageFormat(url: string): string {
+  const match = PHILIBERT_IMAGE_FORMAT_RE.exec(url);
+  return match ? `${match[1]}${match[2]}` : url;
+}
+
+/**
  * Races `promise` against a timer. Promise.race can't actually cancel the
  * loser, so `onTimeout` (typically closing the Playwright context driving
  * `promise`) is invoked when the timer wins, forcing the abandoned work to
