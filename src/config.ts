@@ -18,15 +18,15 @@ export const config = {
   host: process.env.HOST ?? "0.0.0.0",
   apiKey: process.env.API_KEY ?? "",
   cacheFilePath: process.env.CACHE_FILE_PATH ?? path.join(process.cwd(), "data", "cache.json"),
-  // Overall budget for one source's whole lookup (navigation + extraction).
-  // Worst case for puzzle.fr is 2 navigations, each followed by a 4s
-  // networkidle wait, plus up to 3 extraction reads at 2s each: comfortably
-  // under this default so a slow-but-succeeding lookup isn't cut off by the
-  // outer race before navTimeoutMs would have.
+  // Overall budget for one source's whole lookup (Serper search + page
+  // fetch/navigation + extraction): comfortably under this default so a
+  // slow-but-succeeding lookup isn't cut off by the outer race before
+  // navTimeoutMs/ScraperAPI's own timeout would have.
   sourceTimeoutMs: intFromEnv("SOURCE_TIMEOUT_MS", 40000),
-  // Budget for a single page.goto call; kept below sourceTimeoutMs so a
-  // multi-navigation lookup (search page + product page) still fits inside
-  // the overall per-source budget instead of racing against an identical one.
+  // Budget for a single page.goto call (used by sources that navigate
+  // directly, e.g. Philibert — puzzle.fr fetches through ScraperAPI
+  // instead and isn't bound by this); kept below sourceTimeoutMs so it
+  // still fits inside the overall per-source budget.
   navTimeoutMs: intFromEnv("NAV_TIMEOUT_MS", 10000),
   positiveTtlMs: intFromEnv("POSITIVE_CACHE_TTL_DAYS", 30) * 86_400_000,
   negativeTtlMs: intFromEnv("NEGATIVE_CACHE_TTL_HOURS", 24) * 3_600_000,

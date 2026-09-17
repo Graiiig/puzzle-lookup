@@ -39,8 +39,7 @@ Header: x-api-key: <clé partagée>
 ```
 
 Proxifie une image hébergée sur puzzle.fr ou Philibert (ex. l'`imageUrl`
-renvoyée par `/lookup` — ean-search.org ne renvoie jamais d'image) : renvoie
-les octets de
+renvoyée par `/lookup`) : renvoie les octets de
 l'image avec les bons headers CORS pour l'origine de puzzle-tracker. À
 utiliser côté client au lieu d'un `fetch()` direct de l'`imageUrl`, puisque
 cet hébergeur tiers n'est pas prévu pour être appelé en cross-origin depuis
@@ -75,15 +74,13 @@ un navigateur.
    blocage que sur puzzle.fr. Sélecteurs/structure **non vérifiés** en
    conditions réelles (voir "Sélecteurs à vérifier" plus bas) : ce site
    n'est pas non plus accessible depuis l'environnement de dev.
-3. **ean-search.org** (si rien trouvé avant) : recherche l'EAN, extrait le
-   nom du premier résultat et, si présent, un lien externe vers un
-   revendeur. Nombre de pièces extrait par regex sur le nom (pas garanti).
-   Le statut HTTP de la réponse est vérifié avant toute extraction : ce
-   site bloque régulièrement les requêtes du serveur (page "Access denied",
-   probablement une réputation d'IP datacenter) — sans cette vérification,
-   le code se rabattait sur le `<h1>` de la page bloquée (le logo du site)
-   et le traitait comme un nom de produit valide.
-4. Sinon → `{ "found": false }`.
+3. Sinon → `{ "found": false }`.
+
+(ean-search.org a été utilisé comme 3ᵉ source de repli, mais retiré : peu
+fiable en prod — bloquait une bonne partie des requêtes du serveur, page
+"Access denied" probablement liée à une réputation d'IP datacenter — pour
+une qualité de données plus faible que puzzle.fr/Philibert de toute façon
+[pas d'image, comptage de pièces non garanti].)
 
 ### Recherche puzzle.fr / Philibert via Serper
 
@@ -106,7 +103,7 @@ Tier gratuit à l'inscription largement suffisant vu le volume réel (quelques
 nouveaux puzzles scannés par mois, le reste servi par le cache 30 jours) —
 l'usage ne devrait jamais dépasser le gratuit. Sans cette variable, la
 recherche échoue systématiquement (`errored: true`, court TTL d'erreur) pour
-puzzle.fr et Philibert, et chaque lookup passe directement à ean-search.org.
+puzzle.fr et Philibert, et chaque lookup renvoie `{ "found": false }`.
 
 ### Récupération de la page produit via ScraperAPI
 
@@ -114,10 +111,9 @@ Une fois l'URL du produit connue via Serper, son HTML n'est **pas** récupéré
 en y naviguant directement depuis ce serveur — testé en conditions réelles :
 la page produit exacte visée par un lookup timeout systématiquement (10s,
 `page.goto` n'atteint jamais `domcontentloaded`) depuis ce serveur, alors
-qu'elle se charge instantanément dans un navigateur normal. Même classe de
-problème que le blocage d'ean-search.org (probablement une réputation d'IP
-datacenter), mais qui se manifeste ici par un silence complet plutôt qu'un
-403 explicite.
+qu'elle se charge instantanément dans un navigateur normal — probablement
+une réputation d'IP datacenter, mais qui se manifeste ici par un silence
+complet plutôt qu'un blocage explicite.
 
 [ScraperAPI](https://www.scraperapi.com/) (rotation de proxy + contournement
 anti-bot) sert d'intermédiaire à la place : `GET api.scraperapi.com?api_key=<clé>&url=<url_produit>`
@@ -150,9 +146,9 @@ transitoire du scraping plutôt qu'une vraie absence de résultat).
 ## ⚠️ Sélecteurs à vérifier avant mise en prod
 
 Ce service a été développé dans un environnement sandbox dont la politique
-réseau bloque les accès sortants vers puzzle.fr, Philibert et ean-search.org.
-Les sélecteurs ont donc été ajustés a posteriori, en prod, avec l'aide de
-deux routes de debug (voir plus bas).
+réseau bloque les accès sortants vers puzzle.fr et Philibert. Les sélecteurs
+ont donc été ajustés a posteriori, en prod, avec l'aide de deux routes de
+debug (voir plus bas).
 
 État actuel :
 - **puzzle.fr** : localisation de la page produit via Serper puis
@@ -165,14 +161,6 @@ deux routes de debug (voir plus bas).
   testé en prod** — sélecteurs et fiabilité de la navigation directe (vs.
   besoin potentiel de ScraperAPI comme puzzle.fr) restent à confirmer, comme
   puzzle.fr l'a été avant sa mise en prod initiale.
-- **ean-search.org** : bloque une bonne partie des requêtes en prod (page
-  "Access denied", probablement une réputation d'IP datacenter) — détecté via
-  le statut HTTP de la réponse plutôt que traité comme un résultat valide.
-  Quand une requête passe, l'extraction utilise une liste de sélecteurs
-  candidats (`src/sources/eanSearch.ts`, `RESULT_NAME_SELECTORS`) essayés
-  dans l'ordre, avec repli sur le `<h1>`/`<title>` de la page — pas encore
-  confirmé lequel de ces chemins est réellement emprunté sur une vraie page
-  de résultats (seule la page de blocage a pu être observée jusqu'ici).
 - Dans tous les cas, toute erreur ou structure inattendue fait échouer la
   source silencieusement (`found: false`) plutôt que de planter.
 
@@ -181,28 +169,28 @@ deux routes de debug (voir plus bas).
 1. Depuis une machine avec accès internet (locale ou VPS) :
    ```bash
    npm run inspect -- "https://www.puzzle.fr/<slug-produit-connu>.p<id>.html"
-   npm run inspect -- "https://www.ean-search.org/?q=<un_ean_connu>"
+   npm run inspect -- "https://www.philibertnet.com/fr/<slug-produit-connu>.html"
    ```
    Ça ouvre un vrai Chromium (non-headless) et sauvegarde `debug/page.html` +
    `debug/page.png`.
 
 2. Directement contre le service déployé (utile si pas d'accès Playwright en
    local), via les routes `/debug/html` et `/debug/screenshot` (protégées par
-   `x-api-key`, restreintes aux hosts puzzle.fr/Philibert/ean-search.org) :
+   `x-api-key`, restreintes aux hosts puzzle.fr/Philibert) :
    ```bash
    curl -H "x-api-key: <API_KEY>" \
-     "https://<domaine>/debug/html?url=https%3A%2F%2Fwww.ean-search.org%2F%3Fq%3D<ean>" \
+     "https://<domaine>/debug/html?url=<url_produit_encodée>" \
      -o page.html
    curl -H "x-api-key: <API_KEY>" \
-     "https://<domaine>/debug/screenshot?url=https%3A%2F%2Fwww.ean-search.org%2F%3Fq%3D<ean>" \
+     "https://<domaine>/debug/screenshot?url=<url_produit_encodée>" \
      -o page.png
    ```
 
 Dans les deux cas, compare avec ce que `src/sources/puzzleFr.ts` et
-`src/sources/eanSearch.ts` attendent, et ajuste si besoin. Les tests dans
-`test/sources.test.ts` tournent contre des fixtures HTML locales
-(`test/fixtures/`) qui simulent la structure attendue — à mettre à jour avec
-du vrai HTML si la structure réelle diffère.
+`src/sources/philibert.ts` (via `genericProductExtract.ts`) attendent, et
+ajuste si besoin. Les tests dans `test/sources.test.ts` tournent contre des
+fixtures HTML locales (`test/fixtures/`) qui simulent la structure attendue
+— à mettre à jour avec du vrai HTML si la structure réelle diffère.
 
 ## Développement local
 

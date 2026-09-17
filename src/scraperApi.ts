@@ -11,13 +11,12 @@ interface ScraperApiOutcome {
 /**
  * Fetches a URL's rendered HTML through ScraperAPI instead of directly with
  * this server's own Playwright browser. puzzle.fr's own IP-reputation-based
- * blocking (silently stalls the connection rather than a fast 403 — same
- * class of problem as ean-search.org's explicit "Access denied", just
- * harder to detect) made direct navigation from this server's fixed
- * datacenter IP unreliable regardless of stealth-context tuning: the exact
- * page that timed out from here loaded instantly in a normal browser.
- * ScraperAPI's rotating proxy pool isn't tied to this server's IP, so it
- * isn't subject to the same block.
+ * blocking (silently stalls the connection rather than returning a fast
+ * error, making it harder to detect) made direct navigation from this
+ * server's fixed datacenter IP unreliable regardless of stealth-context
+ * tuning: the exact page that timed out from here loaded instantly in a
+ * normal browser. ScraperAPI's rotating proxy pool isn't tied to this
+ * server's IP, so it isn't subject to the same block.
  */
 export async function fetchViaScraperApi(url: string): Promise<ScraperApiOutcome> {
   if (!config.scraperApiKey) {
