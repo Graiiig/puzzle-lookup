@@ -7,16 +7,20 @@
  * of some unrelated, forgotten host under puzzle.fr/philibertnet.com
  * shouldn't automatically gain access to either endpoint.
  *
- * Image hosts include both www.puzzle.fr (og:image/JSON-LD image can point
- * at the product page's own domain) and data.puzzle.fr (the asset CDN seen
- * on a real lookup) — extraction hasn't been observed to pin down exactly
- * one of these consistently, so both are allowed. www.philibertnet.com is
- * unverified (see README "Sélecteurs à vérifier") — added on the same
- * assumption as puzzle.fr's own domain until real-world testing shows a
- * separate asset CDN is used instead.
+ * Image hosts include both a site's main domain (og:image/JSON-LD image can
+ * point at the product page's own domain) and its separate asset CDN, where
+ * one is known — data.puzzle.fr and cdn1.philibertnet.com, both confirmed
+ * on real lookups — since extraction hasn't been observed to pin down
+ * exactly one of these consistently per site.
  */
 const EXACT_SEARCH_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr", "www.philibertnet.com", "philibertnet.com"]);
-const EXACT_IMAGE_HOSTS = new Set(["www.puzzle.fr", "puzzle.fr", "data.puzzle.fr", "www.philibertnet.com"]);
+const EXACT_IMAGE_HOSTS = new Set([
+  "www.puzzle.fr",
+  "puzzle.fr",
+  "data.puzzle.fr",
+  "www.philibertnet.com",
+  "cdn1.philibertnet.com",
+]);
 
 export function isAllowedSearchHost(hostname: string): boolean {
   return EXACT_SEARCH_HOSTS.has(hostname);
