@@ -9,6 +9,8 @@ export interface GenericExtractOptions {
   stripTitleSuffix?: (title: string) => string;
   /** Site-specific fallback for reading the brand out of the meta description, when JSON-LD has none. */
   brandFromDescription?: (description: string) => string | undefined;
+  /** Site-specific cleanup of the resolved image URL, e.g. swapping a low-res thumbnail variant for the original. */
+  transformImageUrl?: (url: string) => string;
 }
 
 /**
@@ -49,7 +51,9 @@ export async function extractGenericProduct(
   if (!name) return null;
 
   const rawImageUrl = (product ? jsonLdImageUrl(product) : undefined) ?? ogImage ?? undefined;
-  const imageUrl = rawImageUrl ? upgradeToHttps(rawImageUrl) : undefined;
+  const imageUrl = rawImageUrl
+    ? (options.transformImageUrl?.(upgradeToHttps(rawImageUrl)) ?? upgradeToHttps(rawImageUrl))
+    : undefined;
   const brand =
     (product ? jsonLdBrandName(product) : undefined) ??
     (description ? options.brandFromDescription?.(description) : undefined);
