@@ -24,10 +24,13 @@ export const config = {
   // navTimeoutMs/ScraperAPI's own timeout would have.
   sourceTimeoutMs: intFromEnv("SOURCE_TIMEOUT_MS", 40000),
   // Budget for a single page.goto call (used by sources that navigate
-  // directly, e.g. Philibert — puzzle.fr fetches through ScraperAPI
-  // instead and isn't bound by this); kept below sourceTimeoutMs so it
-  // still fits inside the overall per-source budget.
-  navTimeoutMs: intFromEnv("NAV_TIMEOUT_MS", 10000),
+  // directly, e.g. Philibert/frRetailers — puzzle.fr fetches through
+  // ScraperAPI instead and isn't bound by this); kept below sourceTimeoutMs
+  // so it still fits inside the overall per-source budget. Raised from the
+  // original 10s after a real miss: JoueClub's product page took just over
+  // 10s to load once (succeeded on a retry with no other change), so a
+  // borderline-slow-but-fine page was being treated as a failure.
+  navTimeoutMs: intFromEnv("NAV_TIMEOUT_MS", 15000),
   positiveTtlMs: intFromEnv("POSITIVE_CACHE_TTL_DAYS", 30) * 86_400_000,
   negativeTtlMs: intFromEnv("NEGATIVE_CACHE_TTL_HOURS", 24) * 3_600_000,
   // Short TTL for a "not found" that's actually a source error/timeout
