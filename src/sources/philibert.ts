@@ -47,7 +47,10 @@ export async function searchPhilibert(ean: string, context: BrowserContext): Pro
         source: "philibertnet.com",
         transformImageUrl: stripPhilibertImageFormat,
       });
-      if (extracted) return extracted;
+      if (extracted) {
+        console.log(`philibert: matched ${productUrl} for ${ean}`);
+        return extracted;
+      }
       console.warn(`philibert: found ${productUrl} for ${ean} but couldn't extract a name from it`);
       anyCandidateFailed = true;
     }

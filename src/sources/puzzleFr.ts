@@ -48,7 +48,10 @@ export async function searchPuzzleFr(ean: string, context: BrowserContext): Prom
       await page.setContent(fetched.html, { waitUntil: "domcontentloaded" });
 
       const extracted = await extractProduct(page, productUrl);
-      if (extracted) return extracted;
+      if (extracted) {
+        console.log(`puzzle.fr: matched ${productUrl} for ${ean}`);
+        return extracted;
+      }
       // We already confirmed a product page exists at productUrl — failing to
       // extract anything from it (bot-check interstitial, slow render,
       // selector/markup change) is an anomaly, not a genuine "no such
