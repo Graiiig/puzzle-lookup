@@ -54,7 +54,15 @@ export async function searchFrRetailers(ean: string, context: BrowserContext): P
     const source = new URL(productUrl).hostname;
 
     const page = await context.newPage();
-    await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+    const response = await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+    // page.goto() doesn't throw on a non-2xx response — confirmed in prod
+    // on this exact source: a 403 from www.e.leclerc fell through to
+    // extraction and its block page's bare "403" <title> got read back as
+    // a product name (name: "403", no image/brand).
+    if (!response || !response.ok()) {
+      console.warn(`fr-retailers: blocked or errored for ${ean} on ${source} (HTTP ${response?.status()})`);
+      return { found: false, errored: true };
+    }
     await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
     const extracted = await extractGenericProduct(page, productUrl, { source });
