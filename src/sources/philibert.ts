@@ -30,7 +30,15 @@ export async function searchPhilibert(ean: string, context: BrowserContext): Pro
     const productUrl = found.url;
 
     const page = await context.newPage();
-    await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+    const response = await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+    // page.goto() doesn't throw on a non-2xx response — a bot-blocked
+    // request would otherwise fall through to extraction and could pick up
+    // a block page's own generic content as if it were product data (seen
+    // in prod on a different source: a bare "403" <title> read as a name).
+    if (!response || !response.ok()) {
+      console.warn(`philibert: blocked or errored for ${ean} (HTTP ${response?.status()})`);
+      return { found: false, errored: true };
+    }
     await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
     const extracted = await extractGenericProduct(page, productUrl, {

@@ -69,3 +69,11 @@ test("extractGenericProduct reads brand/name/pieces/image from JSON-LD, applying
   assert.equal(result.pieces, 500);
   assert.equal(result.imageUrl, "https://cdn1.philibertnet.com/1234/puzzle-rond-halloween-grafika.jpg");
 });
+
+test("extractGenericProduct rejects a too-short name (e.g. a bare error page's <title>)", async () => {
+  await page.setContent("<html><head><title>403</title></head><body>Forbidden</body></html>");
+  const result = await extractGenericProduct(page, "https://www.e.leclerc/fp/some-puzzle-1000-pieces", {
+    source: "www.e.leclerc",
+  });
+  assert.equal(result, null);
+});

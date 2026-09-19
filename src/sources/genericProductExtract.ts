@@ -48,7 +48,12 @@ export async function extractGenericProduct(
     ogTitle ??
     (pageTitle ? (options.stripTitleSuffix?.(pageTitle) ?? pageTitle) : undefined) ??
     undefined;
-  if (!name) return null;
+  // A short/suspicious name is more likely a bare error page's <title> (a
+  // WAF block page returning e.g. just "403") than a real product — seen in
+  // prod. JSON-LD/og:meta are also checked here rather than only guarding
+  // the <title> fallback specifically, since a blocked page could in theory
+  // carry stale/generic meta tags too.
+  if (!name || name.trim().length < 4) return null;
 
   const rawImageUrl = (product ? jsonLdImageUrl(product) : undefined) ?? ogImage ?? undefined;
   const imageUrl = rawImageUrl
