@@ -20,7 +20,7 @@ const PHILIBERT_HOSTS = new Set(["www.philibertnet.com", "philibertnet.com"]);
  */
 export async function searchPhilibert(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
-    const found = await findProductUrlViaSerper(ean, "philibertnet.com", PHILIBERT_HOSTS);
+    const found = await findProductUrlViaSerper(ean, ["philibertnet.com"], PHILIBERT_HOSTS);
     if (!found.url) {
       if (!found.errored) {
         console.warn(`philibert: no product found via Serper for ${ean}`);

@@ -32,7 +32,7 @@ test("findProductUrlViaSerper picks the first result on an allowed host, regardl
     );
   }) as typeof fetch;
 
-  const result = await findProductUrlViaSerper("3663384337789", "puzzle.fr", PUZZLE_FR_HOSTS);
+  const result = await findProductUrlViaSerper("3663384337789", ["puzzle.fr"], PUZZLE_FR_HOSTS);
   assert.equal(result.url, "https://www.puzzle.fr/product/show/grafika-puzzle-rond-halloween-500-pieces");
   assert.equal(result.errored, false);
 });
@@ -46,7 +46,7 @@ test("findProductUrlViaSerper skips a result on a host outside the allowed set",
       { status: 200 },
     )) as typeof fetch;
 
-  const result = await findProductUrlViaSerper("3663384337789", "puzzle.fr", PUZZLE_FR_HOSTS);
+  const result = await findProductUrlViaSerper("3663384337789", ["puzzle.fr"], PUZZLE_FR_HOSTS);
   assert.equal(result.url, undefined);
   assert.equal(result.errored, false);
 });
@@ -54,7 +54,7 @@ test("findProductUrlViaSerper skips a result on a host outside the allowed set",
 test("findProductUrlViaSerper returns a clean miss (not errored) when nothing matches", async () => {
   globalThis.fetch = (async () => new Response(JSON.stringify({ organic: [] }), { status: 200 })) as typeof fetch;
 
-  const result = await findProductUrlViaSerper("0000000000000", "puzzle.fr", PUZZLE_FR_HOSTS);
+  const result = await findProductUrlViaSerper("0000000000000", ["puzzle.fr"], PUZZLE_FR_HOSTS);
   assert.equal(result.url, undefined);
   assert.equal(result.errored, false);
 });
@@ -62,7 +62,7 @@ test("findProductUrlViaSerper returns a clean miss (not errored) when nothing ma
 test("findProductUrlViaSerper reports errored on a non-ok HTTP response", async () => {
   globalThis.fetch = (async () => new Response("quota exceeded", { status: 429 })) as typeof fetch;
 
-  const result = await findProductUrlViaSerper("4005556197766", "puzzle.fr", PUZZLE_FR_HOSTS);
+  const result = await findProductUrlViaSerper("4005556197766", ["puzzle.fr"], PUZZLE_FR_HOSTS);
   assert.equal(result.url, undefined);
   assert.equal(result.errored, true);
 });
@@ -70,17 +70,35 @@ test("findProductUrlViaSerper reports errored on a non-ok HTTP response", async 
 test("findProductUrlViaSerper reports errored when the API key isn't configured", async () => {
   config.serperApiKey = "";
 
-  const result = await findProductUrlViaSerper("4005556197766", "puzzle.fr", PUZZLE_FR_HOSTS);
+  const result = await findProductUrlViaSerper("4005556197766", ["puzzle.fr"], PUZZLE_FR_HOSTS);
   assert.equal(result.url, undefined);
   assert.equal(result.errored, true);
 });
 
-test("findProductUrlViaSerper restricts the query to the given site", async () => {
+test("findProductUrlViaSerper restricts the query to a single given site", async () => {
   globalThis.fetch = (async (_input, init) => {
     const body = JSON.parse((init as RequestInit).body as string);
     assert.equal(body.q, "site:philibertnet.com 3663384337789");
     return new Response(JSON.stringify({ organic: [] }), { status: 200 });
   }) as typeof fetch;
 
-  await findProductUrlViaSerper("3663384337789", "philibertnet.com", new Set(["www.philibertnet.com"]));
+  await findProductUrlViaSerper("3663384337789", ["philibertnet.com"], new Set(["www.philibertnet.com"]));
+});
+
+test("findProductUrlViaSerper ORs multiple sites into one query", async () => {
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse((init as RequestInit).body as string);
+    assert.equal(body.q, "(site:cultura.com OR site:joueclub.fr) 3700217325114");
+    return new Response(
+      JSON.stringify({ organic: [{ link: "https://www.joueclub.fr/puzzle/some-puzzle-3700217325114.html" }] }),
+      { status: 200 },
+    );
+  }) as typeof fetch;
+
+  const result = await findProductUrlViaSerper(
+    "3700217325114",
+    ["cultura.com", "joueclub.fr"],
+    new Set(["www.cultura.com", "www.joueclub.fr"]),
+  );
+  assert.equal(result.url, "https://www.joueclub.fr/puzzle/some-puzzle-3700217325114.html");
 });

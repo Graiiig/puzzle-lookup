@@ -3,14 +3,18 @@ import { test } from "node:test";
 import { config } from "../src/config.js";
 import { isValidEan, negativeTtlMsFor } from "../src/lookup.js";
 
-test("negativeTtlMsFor uses the short error TTL when either source errored", () => {
-  assert.equal(negativeTtlMsFor({ errored: true }, { errored: false }), config.errorTtlMs);
-  assert.equal(negativeTtlMsFor({ errored: false }, { errored: true }), config.errorTtlMs);
-  assert.equal(negativeTtlMsFor({ errored: true }, { errored: true }), config.errorTtlMs);
+const ok = { errored: false };
+const err = { errored: true };
+
+test("negativeTtlMsFor uses the short error TTL when any source errored", () => {
+  assert.equal(negativeTtlMsFor(err, ok, ok), config.errorTtlMs);
+  assert.equal(negativeTtlMsFor(ok, err, ok), config.errorTtlMs);
+  assert.equal(negativeTtlMsFor(ok, ok, err), config.errorTtlMs);
+  assert.equal(negativeTtlMsFor(err, err, err), config.errorTtlMs);
 });
 
-test("negativeTtlMsFor uses the long negative TTL only when both sources cleanly found nothing", () => {
-  assert.equal(negativeTtlMsFor({ errored: false }, { errored: false }), config.negativeTtlMs);
+test("negativeTtlMsFor uses the long negative TTL only when every source cleanly found nothing", () => {
+  assert.equal(negativeTtlMsFor(ok, ok, ok), config.negativeTtlMs);
 });
 
 test("negativeTtlMsFor's error TTL is meaningfully shorter than the negative TTL", () => {

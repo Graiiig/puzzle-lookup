@@ -23,7 +23,7 @@ export async function extractProduct(page: Page, productUrl: string): Promise<Lo
  */
 export async function searchPuzzleFr(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
-    const found = await findProductUrlViaSerper(ean, "puzzle.fr", PUZZLE_FR_HOSTS);
+    const found = await findProductUrlViaSerper(ean, ["puzzle.fr"], PUZZLE_FR_HOSTS);
     if (!found.url) {
       if (!found.errored) {
         console.warn(`puzzle.fr: no product found via Serper for ${ean}`);

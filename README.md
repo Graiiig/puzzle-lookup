@@ -67,14 +67,25 @@ un navigateur.
    puzzle.fr — localisation via Serper (l'EAN apparaît directement dans
    l'URL de ses pages produit, ex. `.../45151-level-up-4005556208654.html`,
    donc bien indexé par Google), puis extraction JSON-LD/og:meta générique
-   (`extractGenericProduct`, partagée avec puzzle.fr). **Contrairement à
-   puzzle.fr**, la page produit est récupérée par navigation Playwright
-   directe (pas de ScraperAPI) — rien n'indique à ce stade que ce serveur
-   soit bloqué sur ce site ; à revoir si les tests en prod montrent le même
-   blocage que sur puzzle.fr. Sélecteurs/structure **non vérifiés** en
-   conditions réelles (voir "Sélecteurs à vérifier" plus bas) : ce site
-   n'est pas non plus accessible depuis l'environnement de dev.
-3. Sinon → `{ "found": false }`.
+   (`extractGenericProduct`, partagée avec puzzle.fr). Contrairement à
+   puzzle.fr, la page produit est récupérée par navigation Playwright
+   directe (pas de ScraperAPI) — confirmé fonctionnel en prod sans.
+3. **Revendeurs FR génériques** (`src/sources/frRetailers.ts`, si rien
+   trouvé avant) : filet de sécurité plus large qu'un seul revendeur
+   dédié — beaucoup de puzzles (marques plus confidentielles/régionales
+   surtout) ne sont vendus que par des généralistes jouets/loisirs plutôt
+   que par puzzle.fr ou Philibert. Liste courte et curée de sites FR
+   (`FR_RETAILER_SITES` : Cultura, JouéClub, King Jouet, E.Leclerc, BCD
+   Jeux) interrogés en **une seule requête Serper** avec des clauses
+   `site:` combinées par `OR`, plutôt qu'un fichier dédié par site — pas
+   de code spécifique par revendeur (pas d'équivalent ScraperAPI ou du fix
+   d'image Philibert), juste `extractGenericProduct` telle quelle. La
+   source réellement trouvée (`source` dans la réponse) est le nom
+   d'hôte du résultat, déterminé dynamiquement plutôt que codé en dur.
+   Pour ajouter un revendeur : une ligne dans `FR_RETAILER_SITES` + deux
+   entrées d'hôte dans `FR_RETAILER_HOSTS`, à condition que le site ait un
+   balisage schema.org/og:meta standard.
+4. Sinon → `{ "found": false }`.
 
 (ean-search.org a été utilisé comme 3ᵉ source de repli, mais retiré : peu
 fiable en prod — bloquait une bonne partie des requêtes du serveur, page
@@ -82,7 +93,7 @@ fiable en prod — bloquait une bonne partie des requêtes du serveur, page
 une qualité de données plus faible que puzzle.fr/Philibert de toute façon
 [pas d'image, comptage de pièces non garanti].)
 
-### Recherche puzzle.fr / Philibert via Serper
+### Recherche via Serper
 
 Google's own Custom Search JSON API (le choix initial) est fermée aux
 nouveaux projets depuis 2025 et sera totalement arrêtée en janvier 2027 — on
@@ -103,7 +114,7 @@ Tier gratuit à l'inscription largement suffisant vu le volume réel (quelques
 nouveaux puzzles scannés par mois, le reste servi par le cache 30 jours) —
 l'usage ne devrait jamais dépasser le gratuit. Sans cette variable, la
 recherche échoue systématiquement (`errored: true`, court TTL d'erreur) pour
-puzzle.fr et Philibert, et chaque lookup renvoie `{ "found": false }`.
+les trois sources, et chaque lookup renvoie `{ "found": false }`.
 
 ### Récupération de la page produit via ScraperAPI
 
@@ -146,7 +157,7 @@ transitoire du scraping plutôt qu'une vraie absence de résultat).
 ## ⚠️ Sélecteurs à vérifier avant mise en prod
 
 Ce service a été développé dans un environnement sandbox dont la politique
-réseau bloque les accès sortants vers puzzle.fr et Philibert. Les sélecteurs
+réseau bloque les accès sortants vers tous les sites scrapés. Les sélecteurs
 ont donc été ajustés a posteriori, en prod, avec l'aide de deux routes de
 debug (voir plus bas).
 
@@ -163,6 +174,10 @@ debug (voir plus bas).
   image extraits correctement ; `brand` en revanche pas encore vu renseigné
   sur un vrai produit (JSON-LD sans doute sans champ `brand` sur ce site, ou
   ailleurs dans la page — pas creusé plus, à revoir si besoin).
+- **Revendeurs FR génériques** (Cultura, JouéClub, King Jouet, E.Leclerc,
+  BCD Jeux) : **pas encore testé en prod** — ni la requête Serper multi-sites,
+  ni la navigation directe, ni l'extraction générique sur ces sites en
+  particulier. À vérifier comme puzzle.fr/Philibert l'ont été.
 - Dans tous les cas, toute erreur ou structure inattendue fait échouer la
   source silencieusement (`found: false`) plutôt que de planter.
 
@@ -178,7 +193,7 @@ debug (voir plus bas).
 
 2. Directement contre le service déployé (utile si pas d'accès Playwright en
    local), via les routes `/debug/html` et `/debug/screenshot` (protégées par
-   `x-api-key`, restreintes aux hosts puzzle.fr/Philibert) :
+   `x-api-key`, restreintes aux hosts de `src/allowedHosts.ts`) :
    ```bash
    curl -H "x-api-key: <API_KEY>" \
      "https://<domaine>/debug/html?url=<url_produit_encodée>" \
