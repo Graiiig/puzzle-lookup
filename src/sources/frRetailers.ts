@@ -72,7 +72,10 @@ export async function searchFrRetailers(ean: string, context: BrowserContext): P
       await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
 
       const extracted = await extractGenericProduct(page, productUrl, { source });
-      if (extracted) return extracted;
+      if (extracted) {
+        console.log(`fr-retailers: matched ${productUrl} for ${ean}`);
+        return extracted;
+      }
       console.warn(`fr-retailers: found ${productUrl} for ${ean} but couldn't extract a name from it`);
       anyCandidateFailed = true;
     }
