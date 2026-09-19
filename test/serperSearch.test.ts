@@ -17,7 +17,7 @@ afterEach(() => {
   config.serperApiKey = originalApiKey;
 });
 
-test("findProductUrlViaSerper picks the first result on an allowed host, regardless of URL shape", async () => {
+test("findProductUrlViaSerper returns a result on an allowed host, regardless of URL shape", async () => {
   globalThis.fetch = (async (_input, init) => {
     const body = JSON.parse((init as RequestInit).body as string);
     assert.equal(body.q, "site:puzzle.fr 3663384337789");
@@ -33,11 +33,35 @@ test("findProductUrlViaSerper picks the first result on an allowed host, regardl
   }) as typeof fetch;
 
   const result = await findProductUrlViaSerper("3663384337789", ["puzzle.fr"], PUZZLE_FR_HOSTS);
-  assert.equal(result.url, "https://www.puzzle.fr/product/show/grafika-puzzle-rond-halloween-500-pieces");
+  assert.deepEqual(result.urls, ["https://www.puzzle.fr/product/show/grafika-puzzle-rond-halloween-500-pieces"]);
   assert.equal(result.errored, false);
 });
 
-test("findProductUrlViaSerper skips a result on a host outside the allowed set", async () => {
+test("findProductUrlViaSerper returns every matching result, in order, not just the first", async () => {
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        organic: [
+          { link: "https://www.cultura.com/p-some-puzzle-3700217325114.html" },
+          { link: "https://some-other-site.example/3700217325114" },
+          { link: "https://www.joueclub.fr/puzzle/some-puzzle-3700217325114.html" },
+        ],
+      }),
+      { status: 200 },
+    )) as typeof fetch;
+
+  const result = await findProductUrlViaSerper(
+    "3700217325114",
+    ["cultura.com", "joueclub.fr"],
+    new Set(["www.cultura.com", "www.joueclub.fr"]),
+  );
+  assert.deepEqual(result.urls, [
+    "https://www.cultura.com/p-some-puzzle-3700217325114.html",
+    "https://www.joueclub.fr/puzzle/some-puzzle-3700217325114.html",
+  ]);
+});
+
+test("findProductUrlViaSerper returns an empty list when nothing matches an allowed host", async () => {
   globalThis.fetch = (async () =>
     new Response(
       JSON.stringify({
@@ -47,15 +71,15 @@ test("findProductUrlViaSerper skips a result on a host outside the allowed set",
     )) as typeof fetch;
 
   const result = await findProductUrlViaSerper("3663384337789", ["puzzle.fr"], PUZZLE_FR_HOSTS);
-  assert.equal(result.url, undefined);
+  assert.deepEqual(result.urls, []);
   assert.equal(result.errored, false);
 });
 
-test("findProductUrlViaSerper returns a clean miss (not errored) when nothing matches", async () => {
+test("findProductUrlViaSerper returns a clean miss (not errored) when Serper itself has no results", async () => {
   globalThis.fetch = (async () => new Response(JSON.stringify({ organic: [] }), { status: 200 })) as typeof fetch;
 
   const result = await findProductUrlViaSerper("0000000000000", ["puzzle.fr"], PUZZLE_FR_HOSTS);
-  assert.equal(result.url, undefined);
+  assert.deepEqual(result.urls, []);
   assert.equal(result.errored, false);
 });
 
@@ -63,7 +87,7 @@ test("findProductUrlViaSerper reports errored on a non-ok HTTP response", async 
   globalThis.fetch = (async () => new Response("quota exceeded", { status: 429 })) as typeof fetch;
 
   const result = await findProductUrlViaSerper("4005556197766", ["puzzle.fr"], PUZZLE_FR_HOSTS);
-  assert.equal(result.url, undefined);
+  assert.deepEqual(result.urls, []);
   assert.equal(result.errored, true);
 });
 
@@ -71,7 +95,7 @@ test("findProductUrlViaSerper reports errored when the API key isn't configured"
   config.serperApiKey = "";
 
   const result = await findProductUrlViaSerper("4005556197766", ["puzzle.fr"], PUZZLE_FR_HOSTS);
-  assert.equal(result.url, undefined);
+  assert.deepEqual(result.urls, []);
   assert.equal(result.errored, true);
 });
 
@@ -100,5 +124,5 @@ test("findProductUrlViaSerper ORs multiple sites into one query", async () => {
     ["cultura.com", "joueclub.fr"],
     new Set(["www.cultura.com", "www.joueclub.fr"]),
   );
-  assert.equal(result.url, "https://www.joueclub.fr/puzzle/some-puzzle-3700217325114.html");
+  assert.deepEqual(result.urls, ["https://www.joueclub.fr/puzzle/some-puzzle-3700217325114.html"]);
 });

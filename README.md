@@ -175,9 +175,17 @@ debug (voir plus bas).
   sur un vrai produit (JSON-LD sans doute sans champ `brand` sur ce site, ou
   ailleurs dans la page — pas creusé plus, à revoir si besoin).
 - **Revendeurs FR génériques** (Cultura, JouéClub, King Jouet, E.Leclerc,
-  BCD Jeux) : **pas encore testé en prod** — ni la requête Serper multi-sites,
-  ni la navigation directe, ni l'extraction générique sur ces sites en
-  particulier. À vérifier comme puzzle.fr/Philibert l'ont été.
+  BCD Jeux) : testé une première fois en prod — a révélé deux bugs déjà
+  corrigés : (1) www.e.leclerc bloque (403), et comme la navigation ne
+  vérifiait pas le statut de la réponse, la page de blocage a été lue
+  comme un produit valide (`name: "403"`) ; (2) la requête Serper combinée
+  n'avait renvoyé qu'un seul candidat (E.Leclerc) alors que d'autres
+  revendeurs de la liste auraient pu convenir — `findProductUrlViaSerper`
+  ne gardait que le premier résultat matchant au lieu de tous les essayer.
+  Les deux sont corrigés (vérif du statut HTTP + essai de tous les
+  candidats dans l'ordre), mais aucun des 5 revendeurs n'a encore été
+  confirmé fonctionnel de bout en bout (seul le chemin d'échec a été vu
+  jusqu'ici).
 - Dans tous les cas, toute erreur ou structure inattendue fait échouer la
   source silencieusement (`found: false`) plutôt que de planter.
 

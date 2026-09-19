@@ -44,31 +44,39 @@ export const FR_RETAILER_HOSTS = new Set([
 export async function searchFrRetailers(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
     const found = await findProductUrlViaSerper(ean, FR_RETAILER_SITES, FR_RETAILER_HOSTS);
-    if (!found.url) {
+    if (found.urls.length === 0) {
       if (!found.errored) {
         console.warn(`fr-retailers: no product found via Serper for ${ean}`);
       }
       return { found: false, errored: found.errored };
     }
-    const productUrl = found.url;
-    const source = new URL(productUrl).hostname;
 
-    const page = await context.newPage();
-    const response = await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
-    // page.goto() doesn't throw on a non-2xx response — confirmed in prod
-    // on this exact source: a 403 from www.e.leclerc fell through to
-    // extraction and its block page's bare "403" <title> got read back as
-    // a product name (name: "403", no image/brand).
-    if (!response || !response.ok()) {
-      console.warn(`fr-retailers: blocked or errored for ${ean} on ${source} (HTTP ${response?.status()})`);
-      return { found: false, errored: true };
+    // Tries every matching candidate in order, not just the first — confirmed
+    // in prod that a combined multi-site query can come back with only one
+    // matching retailer at all, and if that one happens to be blocked (seen:
+    // a 403 from www.e.leclerc whose block page's bare "403" <title> almost
+    // got read back as a product name), stopping there would lose the whole
+    // tier even when a different candidate might have worked. Bounded by the
+    // outer per-source timeout (config.sourceTimeoutMs) either way, so a long
+    // string of blocked candidates still fails closed rather than hanging.
+    let anyCandidateFailed = false;
+    for (const productUrl of found.urls) {
+      const source = new URL(productUrl).hostname;
+      const page = await context.newPage();
+      const response = await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+      if (!response || !response.ok()) {
+        console.warn(`fr-retailers: blocked or errored for ${ean} on ${source} (HTTP ${response?.status()})`);
+        anyCandidateFailed = true;
+        continue;
+      }
+      await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+
+      const extracted = await extractGenericProduct(page, productUrl, { source });
+      if (extracted) return extracted;
+      console.warn(`fr-retailers: found ${productUrl} for ${ean} but couldn't extract a name from it`);
+      anyCandidateFailed = true;
     }
-    await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
-
-    const extracted = await extractGenericProduct(page, productUrl, { source });
-    if (extracted) return extracted;
-    console.warn(`fr-retailers: found ${productUrl} for ${ean} but couldn't extract a name from it`);
-    return { found: false, errored: true };
+    return { found: false, errored: anyCandidateFailed };
   } catch (err) {
     console.warn(`fr-retailers: scrape failed for ${ean}:`, (err as Error).message);
     return { found: false, errored: true };
