@@ -21,33 +21,37 @@ const PHILIBERT_HOSTS = new Set(["www.philibertnet.com", "philibertnet.com"]);
 export async function searchPhilibert(ean: string, context: BrowserContext): Promise<SourceResult> {
   try {
     const found = await findProductUrlViaSerper(ean, ["philibertnet.com"], PHILIBERT_HOSTS);
-    if (!found.url) {
+    if (found.urls.length === 0) {
       if (!found.errored) {
         console.warn(`philibert: no product found via Serper for ${ean}`);
       }
       return { found: false, errored: found.errored };
     }
-    const productUrl = found.url;
 
-    const page = await context.newPage();
-    const response = await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
-    // page.goto() doesn't throw on a non-2xx response — a bot-blocked
-    // request would otherwise fall through to extraction and could pick up
-    // a block page's own generic content as if it were product data (seen
-    // in prod on a different source: a bare "403" <title> read as a name).
-    if (!response || !response.ok()) {
-      console.warn(`philibert: blocked or errored for ${ean} (HTTP ${response?.status()})`);
-      return { found: false, errored: true };
+    let anyCandidateFailed = false;
+    for (const productUrl of found.urls) {
+      const page = await context.newPage();
+      const response = await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: config.navTimeoutMs });
+      // page.goto() doesn't throw on a non-2xx response — a bot-blocked
+      // request would otherwise fall through to extraction and could pick up
+      // a block page's own generic content as if it were product data (seen
+      // in prod on a different source: a bare "403" <title> read as a name).
+      if (!response || !response.ok()) {
+        console.warn(`philibert: blocked or errored for ${ean} (HTTP ${response?.status()})`);
+        anyCandidateFailed = true;
+        continue;
+      }
+      await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+
+      const extracted = await extractGenericProduct(page, productUrl, {
+        source: "philibertnet.com",
+        transformImageUrl: stripPhilibertImageFormat,
+      });
+      if (extracted) return extracted;
+      console.warn(`philibert: found ${productUrl} for ${ean} but couldn't extract a name from it`);
+      anyCandidateFailed = true;
     }
-    await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
-
-    const extracted = await extractGenericProduct(page, productUrl, {
-      source: "philibertnet.com",
-      transformImageUrl: stripPhilibertImageFormat,
-    });
-    if (extracted) return extracted;
-    console.warn(`philibert: found ${productUrl} for ${ean} but couldn't extract a name from it`);
-    return { found: false, errored: true };
+    return { found: false, errored: anyCandidateFailed };
   } catch (err) {
     console.warn(`philibert: scrape failed for ${ean}:`, (err as Error).message);
     return { found: false, errored: true };
