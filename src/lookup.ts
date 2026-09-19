@@ -2,6 +2,7 @@ import type { BrowserContext } from "playwright";
 import { newStealthContext } from "./browser.js";
 import { getCached, setCached } from "./cache.js";
 import { config } from "./config.js";
+import { searchFrRetailers } from "./sources/frRetailers.js";
 import { searchPhilibert } from "./sources/philibert.js";
 import { searchPuzzleFr } from "./sources/puzzleFr.js";
 import type { LookupResult, SourceResult } from "./types.js";
@@ -49,8 +50,14 @@ export async function lookupEan(ean: string, options: { skipCache?: boolean } = 
     return philibert;
   }
 
+  const frRetailers = await tryOne(searchFrRetailers, ean, "fr-retailers");
+  if (frRetailers.found) {
+    await setCached(ean, frRetailers, config.positiveTtlMs);
+    return frRetailers;
+  }
+
   const final: LookupResult = { found: false };
-  await setCached(ean, final, negativeTtlMsFor(puzzleFr, philibert));
+  await setCached(ean, final, negativeTtlMsFor(puzzleFr, philibert, frRetailers));
   return final;
 }
 
@@ -62,6 +69,10 @@ export async function lookupEan(ean: string, options: { skipCache?: boolean } = 
  * gets. Exported as a pure function so this decision is unit-testable
  * without needing a real browser/network.
  */
-export function negativeTtlMsFor(puzzleFr: { errored: boolean }, philibert: { errored: boolean }): number {
-  return puzzleFr.errored || philibert.errored ? config.errorTtlMs : config.negativeTtlMs;
+export function negativeTtlMsFor(
+  puzzleFr: { errored: boolean },
+  philibert: { errored: boolean },
+  frRetailers: { errored: boolean },
+): number {
+  return puzzleFr.errored || philibert.errored || frRetailers.errored ? config.errorTtlMs : config.negativeTtlMs;
 }

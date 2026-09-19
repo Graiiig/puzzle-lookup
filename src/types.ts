@@ -1,4 +1,11 @@
-export type LookupSource = "puzzle.fr" | "philibertnet.com";
+/**
+ * The hostname of whichever source actually answered. A plain string
+ * rather than a fixed union: the broad-retailer-net source
+ * (frRetailers.ts) covers a growing, curated list of sites and reports
+ * back whichever one actually matched, dynamically — a fixed union would
+ * need editing on every retailer added there.
+ */
+export type LookupSource = string;
 
 export interface LookupFound {
   found: true;
