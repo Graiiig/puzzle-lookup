@@ -21,12 +21,12 @@ export const config = {
   // Overall budget for one source's whole lookup (Serper search + page
   // fetch/navigation + extraction): comfortably under this default so a
   // slow-but-succeeding lookup isn't cut off by the outer race before
-  // navTimeoutMs/ScraperAPI's own timeout would have.
+  // navTimeoutMs/Zyte's own timeout would have.
   sourceTimeoutMs: intFromEnv("SOURCE_TIMEOUT_MS", 40000),
   // Budget for a single page.goto call (used by sources that navigate
-  // directly, e.g. Philibert/frRetailers — puzzle.fr fetches through
-  // ScraperAPI instead and isn't bound by this); kept below sourceTimeoutMs
-  // so it still fits inside the overall per-source budget. Raised from the
+  // directly, e.g. Philibert/frRetailers — puzzle.fr fetches through Zyte
+  // instead and isn't bound by this); kept below sourceTimeoutMs so it
+  // still fits inside the overall per-source budget. Raised from the
   // original 10s after a real miss: JoueClub's product page took just over
   // 10s to load once (succeeded on a retry with no other change), so a
   // borderline-slow-but-fine page was being treated as a failure.
@@ -49,13 +49,13 @@ export const config = {
   // used instead to locate the product page, since the EAN is printed in
   // every product's spec table and gets indexed.
   serperApiKey: process.env.SERPER_API_KEY ?? "",
-  // Once the product URL is known, ScraperAPI (scraperapi.com) fetches its
-  // HTML instead of this server navigating there directly — puzzle.fr
-  // silently stalls direct requests from this server's datacenter IP on
-  // product pages (confirmed: the exact URL that always timed out here
-  // loaded instantly in a normal browser), and ScraperAPI's rotating proxy
-  // pool isn't tied to that IP.
-  scraperApiKey: process.env.SCRAPERAPI_KEY ?? "",
+  // Once the product URL is known, Zyte's API (zyte.com — pay-as-you-go,
+  // no forced monthly minimum) fetches its HTML instead of this server
+  // navigating there directly — puzzle.fr silently stalls direct requests
+  // from this server's datacenter IP on product pages (confirmed: the
+  // exact URL that always timed out here loaded instantly in a normal
+  // browser), and Zyte's proxy pool isn't tied to that IP.
+  zyteApiKey: process.env.ZYTE_API_KEY ?? "",
 };
 
 export function assertConfig(): void {

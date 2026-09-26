@@ -54,8 +54,8 @@ un navigateur.
    (voir "Recherche puzzle.fr via Serper" ci-dessous), restreint à
    `puzzle.fr`, l'EAN étant affiché dans la fiche technique de chaque page
    produit et donc indexé par Google. Une fois l'URL du produit trouvée, son
-   HTML est récupéré via **ScraperAPI** plutôt que par une navigation directe
-   de ce serveur (voir "Récupération de la page produit via ScraperAPI"),
+   HTML est récupéré via **Zyte** plutôt que par une navigation directe
+   de ce serveur (voir "Récupération de la page produit via Zyte"),
    puis on extrait marque/nom/image via les données structurées
    `schema.org/Product` (JSON-LD) de la page si présentes, avec repli sur les
    meta `og:title` / `og:image`, puis sur le `<title>` et la meta
@@ -69,7 +69,7 @@ un navigateur.
    donc bien indexé par Google), puis extraction JSON-LD/og:meta générique
    (`extractGenericProduct`, partagée avec puzzle.fr). Contrairement à
    puzzle.fr, la page produit est récupérée par navigation Playwright
-   directe (pas de ScraperAPI) — confirmé fonctionnel en prod sans.
+   directe (pas de Zyte) — confirmé fonctionnel en prod sans.
 3. **Revendeurs FR génériques** (`src/sources/frRetailers.ts`, si rien
    trouvé avant) : filet de sécurité plus large qu'un seul revendeur
    dédié — beaucoup de puzzles (marques plus confidentielles/régionales
@@ -78,7 +78,7 @@ un navigateur.
    (`FR_RETAILER_SITES` : Cultura, JouéClub, King Jouet, E.Leclerc, BCD
    Jeux) interrogés en **une seule requête Serper** avec des clauses
    `site:` combinées par `OR`, plutôt qu'un fichier dédié par site — pas
-   de code spécifique par revendeur (pas d'équivalent ScraperAPI ou du fix
+   de code spécifique par revendeur (pas d'équivalent Zyte ou du fix
    d'image Philibert), juste `extractGenericProduct` telle quelle. La
    source réellement trouvée (`source` dans la réponse) est le nom
    d'hôte du résultat, déterminé dynamiquement plutôt que codé en dur.
@@ -116,7 +116,7 @@ l'usage ne devrait jamais dépasser le gratuit. Sans cette variable, la
 recherche échoue systématiquement (`errored: true`, court TTL d'erreur) pour
 les trois sources, et chaque lookup renvoie `{ "found": false }`.
 
-### Récupération de la page produit via ScraperAPI
+### Récupération de la page produit via Zyte
 
 Une fois l'URL du produit connue via Serper, son HTML n'est **pas** récupéré
 en y naviguant directement depuis ce serveur — testé en conditions réelles :
@@ -126,20 +126,30 @@ qu'elle se charge instantanément dans un navigateur normal — probablement
 une réputation d'IP datacenter, mais qui se manifeste ici par un silence
 complet plutôt qu'un blocage explicite.
 
-[ScraperAPI](https://www.scraperapi.com/) (rotation de proxy + contournement
-anti-bot) sert d'intermédiaire à la place : `GET api.scraperapi.com?api_key=<clé>&url=<url_produit>`
-renvoie le HTML final, qui est ensuite injecté dans une page Playwright
-locale (`page.setContent`) pour réutiliser tel quel le code d'extraction
-JSON-LD/og:meta existant.
+[Zyte](https://www.zyte.com/) (rotation de proxy + contournement anti-bot,
+pay-as-you-go **sans minimum mensuel forcé** — voir plus bas) sert
+d'intermédiaire à la place : `POST api.zyte.com/v1/extract` (authentification
+HTTP Basic, clé API en tant que nom d'utilisateur) avec `{ "url": "...",
+"httpResponseBody": true }` renvoie le HTML encodé en base64 dans
+`httpResponseBody`, qui est ensuite décodé et injecté dans une page
+Playwright locale (`page.setContent`) pour réutiliser tel quel le code
+d'extraction JSON-LD/og:meta existant. Le `statusCode` de la réponse Zyte
+(celui de puzzle.fr, pas celui de l'appel à Zyte lui-même) est vérifié avant
+toute extraction — même logique de garde-fou que pour ean-search.org/les
+revendeurs FR (voir plus bas), pour ne pas lire une page de blocage comme un
+vrai produit.
 
-1. Créer un compte sur [scraperapi.com](https://www.scraperapi.com/) et
-   récupérer la clé API.
-2. Renseigner `SCRAPERAPI_KEY` (voir `.env.example`).
+1. Créer un compte sur [zyte.com](https://www.zyte.com/) et récupérer la clé
+   API.
+2. Renseigner `ZYTE_API_KEY` (voir `.env.example`).
 
-Comme pour Serper, le tier gratuit à l'inscription (1000 crédits) devrait
-largement couvrir le volume réel de l'appli. Sans cette variable, la
-récupération de la page produit échoue systématiquement (`errored: true`)
-même quand Serper a bien trouvé l'URL.
+**Pourquoi Zyte plutôt que ScraperAPI** (le choix initial) : ScraperAPI
+offre 1000 crédits gratuits à l'inscription, mais ce n'est qu'un essai
+ponctuel — une fois épuisés, son plan le moins cher est à 49$/mois, sans
+rapport avec le volume réel de l'appli (quelques nouveaux puzzles scannés
+par mois). Zyte facture au vrai usage (~0,13$/1000 requêtes HTTP simples,
+sans rendu JS nécessaire ici), sans palier fixe à payer qu'on l'utilise ou
+non — largement moins d'un centime par mois à ce volume.
 
 Le scraping passe par Playwright (Chromium headless) car ces sites
 bloquent les requêtes HTTP simples (403).
@@ -163,12 +173,14 @@ debug (voir plus bas).
 
 État actuel :
 - **puzzle.fr** : localisation de la page produit via Serper puis
-  récupération de son HTML via ScraperAPI (voir les deux sections
-  ci-dessus, nécessite `SERPER_API_KEY` et `SCRAPERAPI_KEY`). Chaîne
+  récupération de son HTML via Zyte (voir les deux sections
+  ci-dessus, nécessite `SERPER_API_KEY` et `ZYTE_API_KEY`). Chaîne
   complète (Serper → ScraperAPI → extraction JSON-LD/og:meta) confirmée
-  fonctionnelle en prod de bout en bout.
+  fonctionnelle en prod de bout en bout **avec ScraperAPI** — le switch vers
+  Zyte (même contrat : HTML en clair en retour) doit encore être reconfirmé
+  en conditions réelles après le changement.
 - **Philibert** : localisation via Serper puis navigation Playwright directe
-  (pas de ScraperAPI, voir "Logique de résolution" ci-dessus). Chaîne
+  (pas de Zyte, voir "Logique de résolution" ci-dessus). Chaîne
   complète confirmée fonctionnelle en prod de bout en bout — la navigation
   directe suffit, pas de blocage IP observé comme sur puzzle.fr. Nom/pièces/
   image extraits correctement ; `brand` en revanche pas encore vu renseigné
@@ -241,9 +253,9 @@ npm test        # tests unitaires (regex pièces) + tests d'extraction sur fixtu
 1. Connecter ce repo Git dans Coolify. Le `Dockerfile` est détecté
    automatiquement (build/déploiement à chaque push, webhook standard).
 2. Variables d'environnement à définir dans Coolify (voir `.env.example`) :
-   `API_KEY`, ainsi que `SERPER_API_KEY` et `SCRAPERAPI_KEY` (voir les
-   sections "Recherche puzzle.fr via Serper" et "Récupération de la page
-   produit via ScraperAPI" — sans elles, puzzle.fr ne renverra jamais aucun
+   `API_KEY`, ainsi que `SERPER_API_KEY` et `ZYTE_API_KEY` (voir les
+   sections "Recherche via Serper" et "Récupération de la page
+   produit via Zyte" — sans elles, puzzle.fr ne renverra jamais aucun
    résultat). `PORT`/`HOST` peuvent rester par défaut.
 3. Démarrer en exposant IP:port pour tester, puis brancher un (sous-)domaine
    + HTTPS (géré automatiquement par Coolify) une fois validé.

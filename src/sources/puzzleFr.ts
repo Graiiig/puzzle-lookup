@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "playwright";
-import { fetchViaScraperApi } from "../scraperApi.js";
 import { extractBrandFromDescription, stripPuzzleFrSiteSuffix } from "../util.js";
+import { fetchViaZyteApi } from "../zyteApi.js";
 import type { LookupFound, SourceResult } from "../types.js";
 import { extractGenericProduct } from "./genericProductExtract.js";
 import { findProductUrlViaSerper } from "./serperSearch.js";
@@ -33,13 +33,13 @@ export async function searchPuzzleFr(ean: string, context: BrowserContext): Prom
 
     let anyCandidateFailed = false;
     for (const productUrl of found.urls) {
-      // Fetched through ScraperAPI's proxy pool rather than a direct
-      // page.goto() from this server — see fetchViaScraperApi's doc comment
-      // for why (this exact class of URL silently stalls when navigated to
-      // directly, despite loading instantly in a normal browser).
-      const fetched = await fetchViaScraperApi(productUrl);
+      // Fetched through Zyte's proxy pool rather than a direct page.goto()
+      // from this server — see fetchViaZyteApi's doc comment for why (this
+      // exact class of URL silently stalls when navigated to directly,
+      // despite loading instantly in a normal browser).
+      const fetched = await fetchViaZyteApi(productUrl);
       if (!fetched.html) {
-        console.warn(`puzzle.fr: couldn't fetch ${productUrl} via ScraperAPI for ${ean}`);
+        console.warn(`puzzle.fr: couldn't fetch ${productUrl} via Zyte for ${ean}`);
         anyCandidateFailed = true;
         continue;
       }
